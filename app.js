@@ -3747,7 +3747,7 @@ const LOOP_COLORS = [
 // Cell size (px) used only by the infinite Wrap view. Kept smaller than the
 // Normal view's 80px cells so several repeated tiles are visible at once
 // instead of just one screen's worth.
-const WRAP_CELL_SIZE = 60;
+const WRAP_CELL_SIZE = 44;
 
 function renderHTMLKMap() {
     if (!wasmReady) return;
@@ -3913,11 +3913,15 @@ function render2DKMap(numVars, variables, minterms, dontCares, activeSolution, i
     container.style.transform = `scale(${scale})`;
     container.style.transformOrigin = 'center center';
     
-    svgOverlay.innerHTML = '';
-    // SVG sizing and drawing must wait 1 tick for the DOM to reflect transform
+    // SVG sizing and drawing must wait 1 tick for the DOM to reflect transform.
+    // Clearing happens here too (not before the rAF) so the old loops and the
+    // new loops swap in the same paint - clearing earlier left a one-frame
+    // gap where the overlay was empty, which read as every group "blinking"
+    // on each re-render (e.g. every time a cell is clicked).
     requestAnimationFrame(() => {
         svgOverlay.setAttribute('width', svgOverlay.parentElement.clientWidth);
         svgOverlay.setAttribute('height', svgOverlay.parentElement.clientHeight);
+        svgOverlay.innerHTML = '';
         if (showLoops && activeSolution && activeSolution.length > 0) {
             drawSVGLoops(activeSolution, numVars, rowsBits, colsBits, rowGray, colGray, false, '', scale);
         }
@@ -4291,8 +4295,7 @@ function renderMultiple2DKMaps(numVars, variables, minterms, dontCares, activeSo
     container.style.transform = 'none'; // reset before measure
     
     svgOverlay.style.display = 'block';
-    svgOverlay.innerHTML = '';
-    
+
     if(wrapper3d) wrapper3d.style.display = 'none';
     if(wrapContainer) wrapContainer.style.display = 'none';
 
@@ -4359,9 +4362,12 @@ function renderMultiple2DKMaps(numVars, variables, minterms, dontCares, activeSo
     container.style.transform = `scale(${scale})`;
     container.style.transformOrigin = 'center center';
     
+    // See render2DKMap for why the clear happens inside the rAF, in the
+    // same tick as the redraw, instead of before it.
     requestAnimationFrame(() => {
         svgOverlay.setAttribute('width', svgOverlay.parentElement.clientWidth);
         svgOverlay.setAttribute('height', svgOverlay.parentElement.clientHeight);
+        svgOverlay.innerHTML = '';
         for (let z = 0; z < numPlanes; z++) {
             const zPrefix = zGray[z];
             drawSVGLoops(activeSolution, numVars, 2, 2, rowGray, colGray, true, zPrefix, scale);
@@ -4607,7 +4613,16 @@ function render3DKMap(numVars, variables, minterms, dontCares, activeSolution, i
     const width = canvasWrap.clientWidth || 600;
     const height = canvasWrap.clientHeight || 380;
 
-    kmap3DState._rot.radius = _getKMap3DFitRadius(width, height);
+    // A cell click just toggles a minterm and re-renders the same lattice -
+    // it shouldn't discard whatever zoom/pan the user had set (pinch on
+    // mobile, wheel on desktop). Only snap back to the auto-fit radius the
+    // first time this view is built, or when the lattice's shape actually
+    // changes (numVars changed, e.g. switching between a 4-var and 5-var
+    // K-map), since the fit radius depends on that shape.
+    const prevNumVars = kmap3DState._ctx ? kmap3DState._ctx.numVars : null;
+    if (prevNumVars === null || prevNumVars !== numVars) {
+        kmap3DState._rot.radius = _getKMap3DFitRadius(width, height);
+    }
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
@@ -4625,6 +4640,7 @@ function render3DKMap(numVars, variables, minterms, dontCares, activeSolution, i
     kmap3DState._scene = scene;
     kmap3DState._camera = camera;
     kmap3DState._ctx = { numVars, variables, minterms, dontCares, activeSolution, isSOP, numLayers, zGray, rowGray, colGray, zVars, rowVars, colVars };
+
 
     // ── Build the cube lattice ──
     const cubeSize = 0.85;
