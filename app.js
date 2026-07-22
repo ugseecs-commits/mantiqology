@@ -1253,16 +1253,21 @@ if (elements.sopPosPill) {
 
 // Theme Toggle Pill
 if (elements.themePill) {
+    // Force the correct theme class on load to match the pill's initial
+    // data-state="dark" — without this, a browser/OS reporting a light
+    // color-scheme preference silently overrides :root to light values
+    // before any click ever happens, so the page can start in light mode
+    // even though the toggle shows "Dark" as selected.
+    document.body.classList.toggle('dark-mode', elements.themePill.getAttribute('data-state') === 'dark');
+    document.body.classList.toggle('light-mode', elements.themePill.getAttribute('data-state') === 'light');
+
     elements.themePill.addEventListener('click', () => {
         const isDark = elements.themePill.getAttribute('data-state') === 'dark';
         const newState = isDark ? 'light' : 'dark';
-        
-        if (newState === 'light') {
-            document.body.classList.add('light-mode');
-        } else {
-            document.body.classList.remove('light-mode');
-        }
-        
+
+        document.body.classList.toggle('light-mode', newState === 'light');
+        document.body.classList.toggle('dark-mode', newState === 'dark');
+
         elements.themePill.setAttribute('data-state', newState);
         elements.themePill.querySelectorAll('.pill-option').forEach(opt => {
             opt.classList.toggle('active', opt.getAttribute('data-val') === newState);
@@ -5315,7 +5320,11 @@ function _wireKMap3DInteractions() {
         if (!kmap3DState._drag.active) return;
         const dx = clientX - kmap3DState._drag.lastX;
         const dy = clientY - kmap3DState._drag.lastY;
-        if (Math.abs(dx) + Math.abs(dy) > 2) kmap3DState._drag.moved = true;
+        // 6px tolerance (was 2px) — 2px is well within normal mouse/finger
+        // jitter during a still click, so nearly every genuine click was
+        // being misclassified as a drag and the cell-toggle raycast in
+        // onUp() below (which only fires when `!moved`) almost never ran.
+        if (Math.abs(dx) + Math.abs(dy) > 6) kmap3DState._drag.moved = true;
         kmap3DState._rot.theta -= dx * 0.008;
         kmap3DState._rot.phi = Math.min(Math.max(kmap3DState._rot.phi - dy * 0.008, 0.25), Math.PI - 0.25);
         kmap3DState._drag.lastX = clientX;
@@ -5353,10 +5362,19 @@ function _wireKMap3DInteractions() {
 
     // Mouse controls (desktop)
     dom.addEventListener('mousedown', (e) => onDown(e.clientX, e.clientY));
-    window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
-    window.addEventListener('mouseup', (e) => onUp(e.clientX, e.clientY));
+
+    // Remove any listeners from a previous wiring pass before attaching new
+    // ones — _wireKMap3DInteractions() runs again after every re-render
+    // (e.g. every single cell toggle), so without this, stale window
+    // listeners referencing the old/detached canvas accumulated forever,
+    // each one re-applying the same drag delta and making rotation get
+    // progressively more erratic the longer a session went on.
+    if (kmap3DState._windowMoveHandler) window.removeEventListener('mousemove', kmap3DState._windowMoveHandler);
+    if (kmap3DState._windowUpHandler) window.removeEventListener('mouseup', kmap3DState._windowUpHandler);
     kmap3DState._windowMoveHandler = (e) => onMove(e.clientX, e.clientY);
     kmap3DState._windowUpHandler = (e) => onUp(e.clientX, e.clientY);
+    window.addEventListener('mousemove', kmap3DState._windowMoveHandler);
+    window.addEventListener('mouseup', kmap3DState._windowUpHandler);
 
     dom.addEventListener('wheel', (e) => {
         e.preventDefault();
@@ -5369,6 +5387,13 @@ function _wireKMap3DInteractions() {
     let _kmap3dPinchDist = 0;
     dom.style.touchAction = 'none';
     dom.addEventListener('touchstart', (e) => {
+        // preventDefault here (touch-action is already 'none', so this
+        // costs no scroll/pan behavior) stops the browser from firing a
+        // delayed "ghost" mousedown/mousemove/mouseup/click at the tap
+        // position afterward. Without it, tapping a cell to toggle it also
+        // triggered the desktop mouse-drag path a moment later, which read
+        // as the view suddenly rotating/resetting right after the tap.
+        e.preventDefault();
         if (e.touches.length === 1) {
             onDown(e.touches[0].clientX, e.touches[0].clientY);
         } else if (e.touches.length === 2) {
@@ -5378,7 +5403,7 @@ function _wireKMap3DInteractions() {
             const [t1, t2] = e.touches;
             _kmap3dPinchDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
         }
-    }, { passive: true });
+    }, { passive: false });
 
     dom.addEventListener('touchmove', (e) => {
         if (e.touches.length === 1 && kmap3DState._drag.active) {
@@ -5398,12 +5423,13 @@ function _wireKMap3DInteractions() {
     }, { passive: false });
 
     const _kmap3dTouchEnd = (e) => {
+        if (e.cancelable) e.preventDefault();
         const lastTouch = e.changedTouches && e.changedTouches[0];
         onUp(lastTouch ? lastTouch.clientX : kmap3DState._drag.lastX, lastTouch ? lastTouch.clientY : kmap3DState._drag.lastY);
         _kmap3dPinchDist = 0;
     };
-    dom.addEventListener('touchend', _kmap3dTouchEnd);
-    dom.addEventListener('touchcancel', _kmap3dTouchEnd);
+    dom.addEventListener('touchend', _kmap3dTouchEnd, { passive: false });
+    dom.addEventListener('touchcancel', _kmap3dTouchEnd, { passive: false });
 
     kmap3DState._resizeHandler = () => {
         const w = canvasWrap.clientWidth, h = canvasWrap.clientHeight;

@@ -79,6 +79,33 @@ body.light-mode {
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
+/* Explicit dark override — re-asserts the same values as the :root default.
+   Needed because @media (prefers-color-scheme: light) above rewrites :root
+   itself based purely on the OS/browser setting, with no awareness of the
+   in-app toggle. Without a class this specific, a user whose OS prefers
+   light had no way to actually reach dark mode — clicking "Dark" removed
+   .light-mode, but :root's own values were already light, so nothing
+   visibly changed. body.dark-mode outranks the :root media-query override
+   for any element under body, so the toggle can now force real dark mode
+   regardless of OS preference. */
+body.dark-mode {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #0f172ab0;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-light: rgba(37, 99, 235, 0.15);
+    --border: #334155;
+    --border-focus: #475569;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --success: #10b981;
+    --success-light: rgba(16, 185, 129, 0.15);
+    --error: #ef4444;
+    --error-light: rgba(239, 68, 68, 0.15);
+}
+
 /* Base resets & box sizing */
 * {
     box-sizing: border-box;
@@ -2287,7 +2314,9 @@ canvas.emscripten {
 }
 .kmap-table { border-collapse: collapse; margin: 20px auto; width: auto; }
 .kmap-cell { border: 1px solid var(--border); width: 60px; height: 60px; min-width: 60px; min-height: 60px; text-align: center; vertical-align: middle; cursor: pointer; user-select: none; transition: background 0.2s; font-family: monospace; font-size: 1.2rem; box-sizing: border-box; }  
-.kmap-cell:hover { background-color: var(--accent-light); }  
+@media (hover: hover) and (pointer: fine) {
+    .kmap-cell:hover { background-color: var(--accent-light); }
+}
 .kmap-table th { padding: 10px; font-weight: bold; background: var(--bg-primary); min-width: 60px; height: 60px; text-align: center; vertical-align: middle; box-sizing: border-box; } 
   
 #kmap-visual-wrapper { position: relative; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; }  
@@ -2310,7 +2339,9 @@ canvas.emscripten {
     color: var(--text-secondary); cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.kmap-3d-tbtn:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+@media (hover: hover) and (pointer: fine) {
+    .kmap-3d-tbtn:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+}
 .kmap-3d-tbtn.active { background: var(--accent); color: #fff; border-color: var(--accent-hover); }
 .kmap-3d-tbtn svg { width: 15px; height: 15px; }
 
@@ -2420,6 +2451,7 @@ canvas.emscripten {
 
 .kmap-table th.kmap-corner, .kmap-corner { 
     position: relative; 
+    z-index: 3;
     min-width: 50px; 
     height: 50px; 
     padding: 0; 
@@ -2495,9 +2527,17 @@ canvas.emscripten {
     width: 100%;
 }
 
-.mobile-bottom-tabs .pill-option {
+/* Higher specificity than the generic ".pill-toggle .pill-option" compact
+   override further down (meant for the SOP/POS and theme pills) — without
+   this, "Algebraic Proof" / "Quine-McCluskey" were being silently shrunk to
+   10.5px (9.5px under 480px) instead of the size intended here, since that
+   generic rule wins any tie by being declared later. */
+.mobile-bottom-tabs .pill-toggle .pill-option {
     flex: 1;
-    font-size: 13.5px;
+    font-size: 12.5px;
+    padding: 6px 6px;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
 }
 
 .solution-split-view > .solution-panel {
@@ -2991,6 +3031,11 @@ canvas.emscripten {
     .pill-toggle .pill-option {
         font-size: 9.5px;
         padding: 4px 9px;
+    }
+
+    .mobile-bottom-tabs .pill-toggle .pill-option {
+        font-size: 11px;
+        padding: 5px 4px;
     }
 
     .theme-toggle .pill-option {
