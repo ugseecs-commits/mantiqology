@@ -3537,7 +3537,13 @@ function generateSVGForSimulation(root, panelId = 'p') {
             </filter>
 
             <!-- Active Trace 3D (Glowing Green PCB Wire) -->
-            <filter id="trace-3d-active-${panelId}" x="-30%" y="-30%" width="160%" height="160%">
+            <!-- userSpaceOnUse, not bbox-relative: a straight horizontal trace
+                 (e.g. the single input into a NOT gate) has a near-zero-height
+                 geometric bounding box, so a percentage-based region clips the
+                 blur/glow almost entirely. Padding is sized to the panel's own
+                 canvas instead of a fixed 2500x2500, so it still shrinks for
+                 small/medium circuits. -->
+            <filter id="trace-3d-active-${panelId}" filterUnits="userSpaceOnUse" x="${-50}" y="${-50}" width="${width + 100}" height="${height + 100}">
                 <feDropShadow dx="1" dy="1.5" stdDeviation="1" flood-color="#000" flood-opacity="0.6" result="shadow"/>
                 <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
                 <feSpecularLighting in="blur" surfaceScale="2" specularConstant="1.2" specularExponent="20" lighting-color="#a5d6a7" result="specOut">
@@ -3555,7 +3561,7 @@ function generateSVGForSimulation(root, panelId = 'p') {
             </filter>
 
             <!-- Inactive Trace 3D (Light Green Trace under solder mask) -->
-            <filter id="trace-3d-inactive-${panelId}" x="-30%" y="-30%" width="160%" height="160%">
+            <filter id="trace-3d-inactive-${panelId}" filterUnits="userSpaceOnUse" x="${-50}" y="${-50}" width="${width + 100}" height="${height + 100}">
                 <feDropShadow dx="1" dy="1.5" stdDeviation="1" flood-color="#000" flood-opacity="0.5"/>
                 <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
                 <feSpecularLighting in="blur" surfaceScale="1.5" specularConstant="0.8" specularExponent="15" lighting-color="#ffffff" result="specOut">
