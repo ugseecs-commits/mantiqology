@@ -2071,10 +2071,7 @@ const minterms = [];
     }
 
     elements.input.value = newExpr;
-    if (wasmReady) {
-        Module.ccall('mantiq_setExpression', null, ['string'], [newExpr]);
-        updateFrontend();
-    }
+    elements.input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 initExportButtons();
@@ -3954,13 +3951,13 @@ function handleKMapCellClick(minterm) {
     if (newDontCares.length > 0) parts.push(`d(${newDontCares.join(',')})`);
     const newExpr = `${variables.join(',')}: ${parts.join(' ')}`;
     
-    document.getElementById('expression-input').value = newExpr;
-    Module.ccall('mantiq_setExpression', null, ['string'], [newExpr]);
+    const inputEl = document.getElementById('expression-input');
+    inputEl.value = newExpr;
     
     if (typeof selectedSolutionIndex !== 'undefined') selectedSolutionIndex = 0;
     
-    renderHTMLKMap();
-    if (typeof updateFrontend === 'function') updateFrontend();
+    // Dispatch a native input event to trigger the main reactive pipeline
+    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 // Same idea as computeAntiOverlapShrink, but operating on integer grid
@@ -5413,6 +5410,36 @@ function renderWrapKMap(numVars, variables, minterms, dontCares, activeSolution,
         window.addEventListener('mouseleave', () => {
             wrapDragState.isDragging = false;
             wrapContainer.style.cursor = 'grab';
+        });
+
+        // Touch event listeners for mobile panning
+        wrapContainer.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                wrapDragState.isDragging = true;
+                wrapDragState.startX = e.touches[0].clientX;
+                wrapDragState.startY = e.touches[0].clientY;
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (wrapDragState.isDragging && e.touches.length === 1) {
+                e.preventDefault();
+                const dx = e.touches[0].clientX - wrapDragState.startX;
+                const dy = e.touches[0].clientY - wrapDragState.startY;
+                wrapDragState.offX += dx;
+                wrapDragState.offY += dy;
+                wrapDragState.startX = e.touches[0].clientX;
+                wrapDragState.startY = e.touches[0].clientY;
+                updateTransform();
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            wrapDragState.isDragging = false;
+        });
+        
+        window.addEventListener('touchcancel', () => {
+            wrapDragState.isDragging = false;
         });
     }
     

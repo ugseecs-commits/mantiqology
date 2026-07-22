@@ -2696,6 +2696,7 @@ canvas.emscripten {
     #app-root:not(.landing):not(.showing-examples) #result-row {
         order: 4;
         flex: 1 1 100%;
+        min-width: 0;
     }
 
     #app-root:not(.landing):not(.showing-examples) #error-feedback {
