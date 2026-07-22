@@ -84,6 +84,7 @@ body.light-mode {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -426,6 +427,7 @@ body {
     margin-left: 24px;
     margin-right: 12px;
     width: auto;
+    min-width: 0;
 }
 
 #app-root.landing .topbar-search-area {
@@ -564,6 +566,7 @@ body {
     -ms-overflow-style: none;
     max-width: calc(100vw - 300px); /* Leave room for sidebar */
     padding-bottom: 4px; /* Optional, for grab area */
+    min-width: 0;
 }
 .draggable-carousel::-webkit-scrollbar {
     display: none;
@@ -898,6 +901,7 @@ body {
     background-color: transparent;
     border: none;
     box-shadow: none;
+    min-width: 0;
 }
 
 #simplified-label {
