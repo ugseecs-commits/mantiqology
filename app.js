@@ -4558,6 +4558,13 @@ function _stopKmap3DAnimLoops() {
 const KMAP3D_COLOR = { one: 0x34C759, dc: 0x8A8F98, zero: 0xFF3B30 };
 const KMAP3D_OPACITY = { one: 0.55, dc: 0.2, zero: 0.32 };
 
+function _getKMap3DFitRadius(w, h) {
+    const aspect = w / h;
+    // 11 is a perfect baseline to fit the exploded 6-variable map on desktop.
+    // If the screen is narrow (portrait), pull back proportionally.
+    return aspect < 1 ? 11 / aspect : 11;
+}
+
 function render3DKMap(numVars, variables, minterms, dontCares, activeSolution, isSOP) {
     const container = document.getElementById('kmap-grid-container');
     const svgOverlay = document.getElementById('kmap-svg-overlay');
@@ -4602,6 +4609,8 @@ function render3DKMap(numVars, variables, minterms, dontCares, activeSolution, i
     const canvasWrap = document.getElementById('kmap-3d-canvas-wrap');
     const width = canvasWrap.clientWidth || 600;
     const height = canvasWrap.clientHeight || 380;
+
+    kmap3DState._rot.radius = _getKMap3DFitRadius(width, height);
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
@@ -5096,7 +5105,9 @@ function _wireKMap3DInteractions() {
             cube.edges.visible = false;
             cube.outline.visible = true;
         });
-        kmap3DState._rot = { theta: 0.7, phi: 1.05, radius: 8.5 };
+        const cw = canvasWrap.clientWidth || 600;
+        const ch = canvasWrap.clientHeight || 380;
+        kmap3DState._rot = { theta: 0.7, phi: 1.05, radius: _getKMap3DFitRadius(cw, ch) };
         kmap3DState._vel = { theta: 0, phi: 0 };
         _updateKMap3DGroupHelpers();
         _updateKMap3DCamera();
@@ -5171,7 +5182,7 @@ function _wireKMap3DInteractions() {
 
     dom.addEventListener('wheel', (e) => {
         e.preventDefault();
-        kmap3DState._rot.radius = Math.min(Math.max(kmap3DState._rot.radius + e.deltaY * 0.01, 4), 18);
+        kmap3DState._rot.radius = Math.min(Math.max(kmap3DState._rot.radius + e.deltaY * 0.01, 4), 50);
         _updateKMap3DCamera();
     }, { passive: false });
 
@@ -5201,7 +5212,7 @@ function _wireKMap3DInteractions() {
             const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
             if (_kmap3dPinchDist > 0) {
                 const delta = dist - _kmap3dPinchDist;
-                kmap3DState._rot.radius = Math.min(Math.max(kmap3DState._rot.radius - delta * 0.03, 4), 18);
+                kmap3DState._rot.radius = Math.min(Math.max(kmap3DState._rot.radius - delta * 0.03, 4), 50);
                 _updateKMap3DCamera();
             }
             _kmap3dPinchDist = dist;
@@ -5222,6 +5233,13 @@ function _wireKMap3DInteractions() {
         kmap3DState._camera.aspect = w / h;
         kmap3DState._camera.updateProjectionMatrix();
         kmap3DState._renderer.setSize(w, h);
+        
+        // Push the camera back if rotating the device caused it to clip
+        const minFit = _getKMap3DFitRadius(w, h);
+        if (kmap3DState._rot.radius < minFit) {
+            kmap3DState._rot.radius = minFit;
+            _updateKMap3DCamera();
+        }
     };
     window.addEventListener('resize', kmap3DState._resizeHandler);
 }
