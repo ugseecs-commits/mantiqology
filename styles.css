@@ -2710,6 +2710,7 @@ canvas.emscripten {
         order: 4;
         flex: 1 1 100%;
         min-width: 0;
+        max-width: 100%;
     }
 
     #app-root:not(.landing):not(.showing-examples) #error-feedback {
@@ -2844,7 +2845,9 @@ canvas.emscripten {
        instead of beside it - that made the carousel (and the solution
        cards inside it) far too narrow and cropped on the right edge. */
     .draggable-carousel {
-        max-width: 100%;
+        max-width: none;
+        flex: 1;
+        min-width: 0;
     }
 
     .solution-split-view {
