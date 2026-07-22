@@ -103,7 +103,13 @@ body {
 /* App Grid Layout */
 #app-root {
     display: grid;
-    grid-template-columns: var(--sidebar-width) 1fr;
+    /* minmax(0, 1fr) instead of a bare 1fr: a plain 1fr track has an
+       implicit min width equal to its content's min-content size, so it
+       won't shrink below that - it grows the whole grid (and the page)
+       instead. minmax(0, 1fr) lets the column actually shrink to fit,
+       so overflow is handled by the carousel's own scroller instead of
+       ballooning the page. */
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
     grid-template-rows: 100%;
     width: 100%;
     height: 100%;
@@ -112,7 +118,7 @@ body {
 
 /* Sidebar Expanded State */
 #app-root.sidebar-expanded {
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: 240px minmax(0, 1fr);
 }
 
 /* ==========================================================================
@@ -120,7 +126,7 @@ body {
    ========================================================================== */
 #app-root.landing,
 #app-root.showing-examples {
-    grid-template-columns: 0px 1fr;
+    grid-template-columns: 0px minmax(0, 1fr);
     grid-template-rows: 100%;
 }
 
@@ -346,6 +352,8 @@ body {
     grid-column: 2;
     height: 100%;
     width: 100%;
+    min-width: 0; /* stop unshrinkable children (e.g. the solutions
+                     carousel) from pushing this wider than its grid track */
     position: relative;
     transition: opacity 0.15s ease-in-out;
 }
@@ -373,6 +381,7 @@ body {
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
+    min-width: 0; /* same reasoning as #main-workspace above */
     z-index: 10;
 }
 
@@ -2612,14 +2621,17 @@ canvas.emscripten {
     /* --- App shell: sidebar becomes a bar docked under the workspace --- */
     #app-root,
     #app-root.sidebar-expanded {
-        grid-template-columns: 1fr;
+        /* minmax(0, 1fr), not a bare 1fr - see the base #app-root rule for
+           why a plain 1fr track refuses to shrink below its content's
+           min-content width. */
+        grid-template-columns: minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) auto;
     }
 
     #app-root.landing,
     #app-root.showing-examples {
         grid-template-rows: 100%;
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     #main-workspace {
