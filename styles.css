@@ -2845,7 +2845,7 @@ canvas.emscripten {
        instead of beside it - that made the carousel (and the solution
        cards inside it) far too narrow and cropped on the right edge. */
     .draggable-carousel {
-        max-width: none;
+        max-width: 100%;
         flex: 1;
         min-width: 0;
     }
