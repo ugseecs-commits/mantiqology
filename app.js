@@ -3159,20 +3159,10 @@ function renderHTMLSimulation(resetZoom = true) {
         });
     };
     
-    if (!isDummy && origDepth <= 10) attachToggles(origSimScroll);
-    if (simpDepth <= 10) attachToggles(simpSimScroll);
+if (!isDummy && origDepth <= 99) attachToggles(origSimScroll);
+    if (simpDepth <= 99) attachToggles(simpSimScroll);
     
-    // orig + simp panels are handled independently (not as one resetZoom-gated
-    // block) so that a panel which has NEVER been fitted yet always gets
-    // fitToContainer/centerPanel + its one-time initPanAndZoom + zoom/fullscreen
-    // button wiring, even on a call that passed resetZoom=false. Without this,
-    // the very first successful expression compile (which calls
-    // renderHTMLSimulation(false) from updateFrontend(), to avoid jarring the
-    // user's pan/zoom on ordinary re-syncs) would skip that one-time init block
-    // forever, leaving the zoom in/out/fullscreen buttons with no click handler
-    // at all until the user happened to click a nav button (whose click handler
-    // calls the parameterless renderHTMLSimulation(), i.e. resetZoom=true).
-    if (!isDummy && origDepth <= 10) {
+    if (!isDummy && origDepth <= 99) {
         const firstInit = !container.dataset.zoomOrigInitialized;
         if (resetZoom || firstInit) {
             // Fit synchronously first - same tick as injectSVG above, before the
@@ -3191,10 +3181,14 @@ function renderHTMLSimulation(resetZoom = true) {
                 fitToContainer('simOrig');
                 centerPanel('simOrig');
             } else {
-                requestAnimationFrame(() => applyZoom('simOrig', false));
+                requestAnimationFrame(() => {
+                    applyZoom('simOrig', false);
+                    _forceCrispRepaint(m.contentEl); // Forces mobile to paint the new SVG
+                });
             }
         }
         if (firstInit) {
+
             initPanAndZoom('original-sim-scroll', 'simOrig');
             container.dataset.zoomOrigInitialized = 'true';
 
@@ -3211,17 +3205,20 @@ function renderHTMLSimulation(resetZoom = true) {
             fitToContainer('simSimp');
             centerPanel('simSimp');
         } else {
-            delete _metricsCache['simSimp'];
-            
-            const m = _measureMetrics('simSimp');
-            if (m && _contentSizeChanged('simSimp', m.w, m.h)) {
-                fitToContainer('simSimp');
-                centerPanel('simSimp');
-            } else {
-                requestAnimationFrame(() => applyZoom('simSimp', false));
+                delete _metricsCache['simSimp'];
+                
+                const m = _measureMetrics('simSimp');
+                if (m && _contentSizeChanged('simSimp', m.w, m.h)) {
+                    fitToContainer('simSimp');
+                    centerPanel('simSimp');
+                } else {
+                    requestAnimationFrame(() => {
+                        applyZoom('simSimp', false);
+                        _forceCrispRepaint(m.contentEl); // Forces mobile to paint the new SVG
+                    });
+                }
             }
-        }
-        if (firstInit) {
+            if (firstInit) {
             const simpSimPanel = document.getElementById('simplified-sim-panel');
             if (simpSimPanel) {
                 initPanAndZoom('simplified-sim-scroll', 'simSimp');
