@@ -5646,6 +5646,15 @@ function drawWrapSVGLoops(solution, numVars, rowsBits, colsBits, rowGray, colGra
 
     const cellSize = WRAP_CELL_SIZE;
 
+    // The 5px pad / 12px corner-radius / 3px stroke-width used below were
+    // tuned for the normal (non-wrap) K-map view's un-scaled 80px cell (see
+    // drawLoopPieceSVG). The wrap view's cell is a fixed 44px, so applying
+    // those same absolute pixel values here makes the outline read as
+    // oversized and over-rounded relative to the smaller cell. Scale them
+    // down by the same ratio, the same way drawLoopPieceSVG scales by the
+    // normal view's container-fit `scale`.
+    const wrapLoopScale = cellSize / 80;
+
     for (let i = 0; i < (tilesX * tilesY); i++) {
         const tile = document.getElementById(`wrap-tile-${i}`);
         if (!tile) continue;
@@ -5697,13 +5706,16 @@ function drawWrapSVGLoops(solution, numVars, rowsBits, colsBits, rowGray, colGra
         // Pass 2: figure out which groups (within this tile) share an overlapping edge.
         const extraShrink = computeAntiOverlapShrink(rects);
 
-        // Pass 3: draw, using the base pad plus any anti-overlap shrink.
+        // Pass 3: draw, using the base pad plus any anti-overlap shrink, both
+        // scaled down to match this view's smaller fixed cell size.
         rects.forEach((r, idx) => {
             if (!r) return;
             const color = colors[idx % colors.length];
-            const pad = 5 + extraShrink[idx];
+            const pad = (5 + extraShrink[idx]) * wrapLoopScale;
             const w = Math.max(2, (r.maxX - r.minX) - pad * 2);
             const h = Math.max(2, (r.maxY - r.minY) - pad * 2);
+            const rx = Math.min(12 * wrapLoopScale, w / 2, h / 2);
+            const strokeWidth = Math.max(1, 3 * wrapLoopScale);
 
             const path = document.createElementNS("http://www.w3.org/2000/svg", "rect");
             path.setAttribute("x", r.minX + pad);
@@ -5713,8 +5725,8 @@ function drawWrapSVGLoops(solution, numVars, rowsBits, colsBits, rowGray, colGra
             path.setAttribute("fill", color);
             path.setAttribute("fill-opacity", "0.2");
             path.setAttribute("stroke", color);
-            path.setAttribute("stroke-width", "3");
-            path.setAttribute("rx", "12");
+            path.setAttribute("stroke-width", String(strokeWidth));
+            path.setAttribute("rx", String(rx));
             wrapSvg.appendChild(path);
         });
     }
