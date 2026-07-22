@@ -3874,6 +3874,21 @@ const LOOP_COLORS = [
 // instead of just one screen's worth.
 const WRAP_CELL_SIZE = 44;
 
+// Currently-selected implicant term (a binary/don't-care pattern string like
+// "1-0-"), clicked from the analysis board's Minimal Expression or Essential
+// Prime Implicants sections. When set, every K-map view (normal, wrap, multi-
+// plane, 3D) draws only that one group instead of the whole solution — the
+// group keeps the exact color it already had (LOOP_COLORS[idx-in-solution]),
+// nothing is recolored, only filtered. null means "show everything" (default).
+let _selectedImplicantTerm = null;
+
+/** Toggle selection of an implicant's K-map group from the analysis board. */
+function selectImplicantGroup(term) {
+    _selectedImplicantTerm = (_selectedImplicantTerm === term) ? null : term;
+    renderHTMLKMap();
+}
+window.selectImplicantGroup = selectImplicantGroup;
+
 function renderHTMLKMap() {
     if (!wasmReady) return;
 
@@ -3907,6 +3922,16 @@ function renderHTMLKMap() {
     if (selectedIdx >= activeSolutions.length) selectedIdx = 0;
     
     const activeSolution = activeSolutions.length > 0 ? activeSolutions[selectedIdx] : [];
+
+    // A selection from a previous expression (or the other SOP/POS side) may
+    // no longer correspond to anything real — drop it rather than silently
+    // filtering every group out of every view.
+    if (_selectedImplicantTerm !== null) {
+        const activeEPIsForValidity = isSOP ? lastKMapData.essentialPrimeImplicants : lastKMapData.essentialPrimeImplicantsPOS;
+        const stillValid = activeSolution.includes(_selectedImplicantTerm) ||
+            (activeEPIsForValidity && activeEPIsForValidity.includes(_selectedImplicantTerm));
+        if (!stillValid) _selectedImplicantTerm = null;
+    }
 
     // Setup K-Map view pill state
     const kmapAltBtn = document.getElementById('kmap-alt-toggle-btn');
@@ -4316,6 +4341,11 @@ function drawSVGLoops(solution, numVars, rowsBits, colsBits, rowGray, colGray, i
     // (un-padded) pixel box.
     const pieces = [];
     solution.forEach((term, idx) => {
+        // A selection restricts which group(s) get drawn, but idx (and so
+        // color) still comes from this term's position in the full solution —
+        // selecting doesn't recolor anything, only hides the rest.
+        if (_selectedImplicantTerm !== null && term !== _selectedImplicantTerm) return;
+
         const zPart = term.slice(0, zBits);
         for (let k = 0; k < zBits; k++) {
             if (zPart[k] !== '-' && zPart[k] !== zOffset[k]) return; // term doesn't touch this plane
@@ -4576,7 +4606,10 @@ function renderKMapAnalysis(solution, isSOP, variables) {
             const color = LOOP_COLORS[colorIdx % LOOP_COLORS.length];
             colorIdx++;
             const literal = binaryToVariables(term, variables, !isSOP);
-            return `<span class="term-box" style="border:1px solid ${color}; color:${color}; background:${color}20;">${literal}</span>`;
+            const isSelected = term === _selectedImplicantTerm;
+            const isDimmed = _selectedImplicantTerm !== null && !isSelected;
+            const cls = `term-box selectable-implicant${isSelected ? ' selected' : ''}${isDimmed ? ' dimmed' : ''}`;
+            return `<span class="${cls}" data-term="${term}" onclick="selectImplicantGroup('${term}')" style="border:1px solid ${color}; color:${color}; background:${color}20;">${literal}</span>`;
         }).join('');
         html += `<div class="term-boxes-container">${solutionHtml}</div>`;
     }
@@ -4591,7 +4624,10 @@ function renderKMapAnalysis(solution, isSOP, variables) {
         html += `<h3 style="color:#AF52DE; font-size:16px; margin:0 0 10px 0;">Essential Prime Implicants:</h3>`;
         const epiHtml = activeEPIs.map(epi => {
             const literal = binaryToVariables(epi, variables, !isSOP);
-            return `<span class="term-box" style="border:1px solid #AF52DE; color:#AF52DE;">${literal}</span>`;
+            const isSelected = epi === _selectedImplicantTerm;
+            const isDimmed = _selectedImplicantTerm !== null && !isSelected;
+            const cls = `term-box selectable-implicant${isSelected ? ' selected' : ''}${isDimmed ? ' dimmed' : ''}`;
+            return `<span class="${cls}" data-term="${epi}" onclick="selectImplicantGroup('${epi}')" style="border:1px solid #AF52DE; color:#AF52DE;">${literal}</span>`;
         }).join('');
         html += `<div class="term-boxes-container">${epiHtml}</div>`;
     }
@@ -5109,6 +5145,10 @@ function _updateKMap3DGroupHelpers() {
     // cubes and wrap-face flags.
     const pieces = []; // { color, members, wrapFaces }
     activeSolution.forEach((term, idx) => {
+        // Selection filters which group gets a wireframe drawn; color still
+        // comes from this term's position in the full solution, unchanged.
+        if (_selectedImplicantTerm !== null && term !== _selectedImplicantTerm) return;
+
         const colorStr = LOOP_COLORS[idx % LOOP_COLORS.length];
         const color = parseInt(colorStr.slice(1), 16);
         const zPart = term.slice(0, zBits);
@@ -5670,6 +5710,11 @@ function drawWrapSVGLoops(solution, numVars, rowsBits, colsBits, rowGray, colGra
         // Pass 1: compute every group's raw (un-padded) box within this tile.
         const rects = solution.map(termStr => {
             const term = termStr;
+
+            // As in drawSVGLoops: a selection filters which term gets a box
+            // (returning null here, same as a term that doesn't touch this
+            // tile), without touching the idx-based color below.
+            if (_selectedImplicantTerm !== null && termStr !== _selectedImplicantTerm) return null;
 
             const rMatches = [];
             for (let r = 0; r < rowGray.length; r++) {

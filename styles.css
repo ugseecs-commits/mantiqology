@@ -2394,6 +2394,24 @@ canvas.emscripten {
 .term-boxes-container { display: flex; flex-wrap: wrap; gap: 8px; }
 .term-box { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; border-radius: 4px; background: var(--bg-tertiary); border: 1px solid var(--border); font-family: 'Fira Code', monospace; font-size: 14px; color: var(--text-primary); }
 
+/* Analysis board: Minimal Expression + Essential Prime Implicant boxes are
+   clickable — selecting one filters the K-map (every view mode) down to
+   just that implicant's group, using the same color the box already has. */
+.term-box.selectable-implicant {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.term-box.selectable-implicant:hover {
+    transform: translateY(-1px);
+}
+.term-box.selectable-implicant.selected {
+    box-shadow: 0 0 0 2px currentColor, 0 2px 8px rgba(0, 0, 0, 0.25);
+    font-weight: 700;
+}
+.term-box.selectable-implicant.dimmed {
+    opacity: 0.35;
+}
+
 .kmap-plane-wrapper { display: flex; flex-direction: column; align-items: center; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); }
 
 .kmap-small .kmap-cell, .kmap-small .kmap-table th { width: 45px; height: 45px; font-size: 14px; padding: 0; }
