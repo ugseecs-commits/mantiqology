@@ -3040,11 +3040,112 @@ function exportSvgToPng(svgElement, filename) {
 // ==========================================
 
 
+// Layout cache populated by generateSVGForSimulation on every full render
+// (new expression, resetZoom). Keyed by panelId ('o' / 's'). toggleSimInput
+// reads from this instead of re-walking the circuit tree.
+const _simLayoutCache = {};
+
 function toggleSimInput(varName) {
     simInputStates[varName] = !simInputStates[varName];
-    renderHTMLSimulation(false); 
+
+    // Fast path: the circuit shape hasn't changed, only variable states —
+    // restyle the ~10-20 affected elements (LED/status-dot colors, trace
+    // colors, cap position) directly instead of regenerating and re-parsing
+    // thousands of characters of SVG markup for both panels.
+    const updatedOrig = updateSimulationColors('o', 'original-sim-scroll');
+    const updatedSimp = updateSimulationColors('s', 'simplified-sim-scroll');
+
+    // Fallback for anything the fast path couldn't handle (e.g. no cached
+    // layout yet, or the panel's SVG isn't in the DOM) — do a full rebuild.
+    if (!updatedOrig && !updatedSimp) {
+        renderHTMLSimulation(false);
+    }
 }
 window.toggleSimInput = toggleSimInput; // Expose for events
+
+/**
+ * Restyle an already-rendered simulation panel to reflect the current
+ * simInputStates, without recomputing layout or regenerating SVG markup.
+ * Returns false (and does nothing) if there's no cached layout or the
+ * panel's SVG isn't currently in the DOM, so the caller can fall back to
+ * a full render.
+ */
+function updateSimulationColors(panelId, scrollElId) {
+    const cache = _simLayoutCache[panelId];
+    if (!cache) return false;
+    const scrollEl = document.getElementById(scrollElId);
+    if (!scrollEl || !scrollEl.querySelector('svg')) return false;
+
+    const { root, posMap, dx, dy } = cache;
+
+    // Same index sequence generateSVGForSimulation used when it built the ids
+    // (copper-traces loop and components loop both walk posMap in this same
+    // order, starting at 0), so idx here lines up with the ids in the DOM.
+    let idx = 0;
+    for (const [node, pos] of posMap.entries()) {
+        const myIdx = idx++;
+        const y = pos.y + dy;
+        const state = evaluateSimLogic(node);
+
+        if (!node.isGate) {
+            const isConst = node.value === '0' || node.value === '1';
+            if (!isConst) {
+                const cap = document.getElementById(`toggle-cap-${panelId}-${myIdx}`);
+                if (cap) cap.setAttribute('cy', state ? y : y - 4);
+                const dot = document.getElementById(`toggle-dot-${panelId}-${myIdx}`);
+                if (dot) dot.setAttribute('fill', state ? '#30d158' : '#ff453a');
+            }
+            continue;
+        }
+
+        const gateDot = document.getElementById(`gate-dot-${panelId}-${myIdx}`);
+        if (gateDot) {
+            if (state) {
+                gateDot.setAttribute('fill', '#60ff60');
+                gateDot.setAttribute('filter', `url(#led-glow-small-${panelId})`);
+            } else {
+                gateDot.setAttribute('fill', '#113311');
+                gateDot.removeAttribute('filter');
+            }
+        }
+
+        if (node.children) {
+            for (let i = 0; i < node.children.length; i++) {
+                const childState = evaluateSimLogic(node.children[i]);
+                const trace = document.getElementById(`trace-${panelId}-${myIdx}-${i}`);
+                if (!trace) continue;
+                if (childState) {
+                    trace.setAttribute('stroke', '#4ade80');
+                    trace.setAttribute('filter', `url(#trace-3d-active-${panelId})`);
+                } else {
+                    trace.setAttribute('stroke', '#154c27');
+                    trace.setAttribute('filter', `url(#trace-3d-inactive-${panelId})`);
+                }
+            }
+        }
+    }
+
+    // Output trace + LED
+    const finalState = evaluateSimLogic(root);
+    const outTrace = document.getElementById(`output-trace-${panelId}`);
+    if (outTrace) {
+        if (finalState) {
+            outTrace.setAttribute('stroke', '#4ade80');
+            outTrace.setAttribute('filter', `url(#trace-3d-active-${panelId})`);
+        } else {
+            outTrace.setAttribute('stroke', '#154c27');
+            outTrace.setAttribute('filter', `url(#trace-3d-inactive-${panelId})`);
+        }
+    }
+    const ledBase = document.getElementById(`led-base-${panelId}`);
+    if (ledBase) ledBase.setAttribute('fill', finalState ? '#882200' : '#220000');
+    const ledDome = document.getElementById(`led-dome-${panelId}`);
+    if (ledDome) ledDome.setAttribute('fill', `url(#${finalState ? 'led-on' : 'led-off'}-${panelId})`);
+    const ledGlow = document.getElementById(`led-glow-circle-${panelId}`);
+    if (ledGlow) ledGlow.setAttribute('opacity', finalState ? '0.35' : '0');
+
+    return true;
+}
 
 function evaluateSimLogic(node) {
     if (!node) return false;
@@ -3436,7 +3537,7 @@ function generateSVGForSimulation(root, panelId = 'p') {
             </filter>
 
             <!-- Active Trace 3D (Glowing Green PCB Wire) -->
-            <filter id="trace-3d-active-${panelId}" filterUnits="userSpaceOnUse" x="-100" y="-100" width="2500" height="2500">
+            <filter id="trace-3d-active-${panelId}" x="-30%" y="-30%" width="160%" height="160%">
                 <feDropShadow dx="1" dy="1.5" stdDeviation="1" flood-color="#000" flood-opacity="0.6" result="shadow"/>
                 <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
                 <feSpecularLighting in="blur" surfaceScale="2" specularConstant="1.2" specularExponent="20" lighting-color="#a5d6a7" result="specOut">
@@ -3454,7 +3555,7 @@ function generateSVGForSimulation(root, panelId = 'p') {
             </filter>
 
             <!-- Inactive Trace 3D (Light Green Trace under solder mask) -->
-            <filter id="trace-3d-inactive-${panelId}" filterUnits="userSpaceOnUse" x="-100" y="-100" width="2500" height="2500">
+            <filter id="trace-3d-inactive-${panelId}" x="-30%" y="-30%" width="160%" height="160%">
                 <feDropShadow dx="1" dy="1.5" stdDeviation="1" flood-color="#000" flood-opacity="0.5"/>
                 <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
                 <feSpecularLighting in="blur" surfaceScale="1.5" specularConstant="0.8" specularExponent="15" lighting-color="#ffffff" result="specOut">
@@ -3510,33 +3611,41 @@ function generateSVGForSimulation(root, panelId = 'p') {
     `;
     
     // --- DRAW COPPER TRACES ---
-    for (const [node, pos] of posMap.entries()) {
-        if (node.isGate && node.children) {
-            const tx = pos.x + dx;
-            const ty = pos.y + dy;
-            const numInputs = node.children.length;
-            const portSpacing = 18;
-            const startPortY = ty - ((numInputs - 1) * portSpacing) / 2;
-            
-            for (let i = 0; i < numInputs; i++) {
-                const child = node.children[i];
-                const childPos = posMap.get(child);
-                const cX = childPos.x + dx;
-                const cY = childPos.y + dy;
-                
-                let sourceX = child.isGate ? getGateOutputPinRange(child.type, cX).endX : cX;
-                const targetY = startPortY + i * portSpacing;
-                // Add a tiny 0.5px vertical offset to avoid 0-height SVG bounding box clipping by filters
-                const adjustedTargetY = (cY === targetY) ? targetY + 0.5 : targetY;
-                const midX = Math.max(sourceX + 20, tx - 35);
-                const endX = tx - 35;
-                
-                const childState = evaluateSimLogic(child);
-                
-                if (childState) {
-                    svgContent += `<path d="M ${sourceX} ${cY} L ${midX} ${cY} L ${midX} ${adjustedTargetY} L ${endX} ${adjustedTargetY}" fill="none" stroke="#4ade80" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trace-3d-active-${panelId})"/>`;
-                } else {
-                    svgContent += `<path d="M ${sourceX} ${cY} L ${midX} ${cY} L ${midX} ${adjustedTargetY} L ${endX} ${adjustedTargetY}" fill="none" stroke="#154c27" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trace-3d-inactive-${panelId})"/>`;
+    // Each node gets a stable index (its position in posMap's iteration order,
+    // which is deterministic for a given tree) so toggleSimInput can look these
+    // paths back up by id later without re-walking/re-stringifying the tree.
+    {
+        let traceIdx = 0;
+        for (const [node, pos] of posMap.entries()) {
+            const myIdx = traceIdx++;
+            if (node.isGate && node.children) {
+                const tx = pos.x + dx;
+                const ty = pos.y + dy;
+                const numInputs = node.children.length;
+                const portSpacing = 18;
+                const startPortY = ty - ((numInputs - 1) * portSpacing) / 2;
+
+                for (let i = 0; i < numInputs; i++) {
+                    const child = node.children[i];
+                    const childPos = posMap.get(child);
+                    const cX = childPos.x + dx;
+                    const cY = childPos.y + dy;
+
+                    let sourceX = child.isGate ? getGateOutputPinRange(child.type, cX).endX : cX;
+                    const targetY = startPortY + i * portSpacing;
+                    // Add a tiny 0.5px vertical offset to avoid 0-height SVG bounding box clipping by filters
+                    const adjustedTargetY = (cY === targetY) ? targetY + 0.5 : targetY;
+                    const midX = Math.max(sourceX + 20, tx - 35);
+                    const endX = tx - 35;
+
+                    const childState = evaluateSimLogic(child);
+                    const traceId = `trace-${panelId}-${myIdx}-${i}`;
+
+                    if (childState) {
+                        svgContent += `<path id="${traceId}" d="M ${sourceX} ${cY} L ${midX} ${cY} L ${midX} ${adjustedTargetY} L ${endX} ${adjustedTargetY}" fill="none" stroke="#4ade80" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trace-3d-active-${panelId})"/>`;
+                    } else {
+                        svgContent += `<path id="${traceId}" d="M ${sourceX} ${cY} L ${midX} ${cY} L ${midX} ${adjustedTargetY} L ${endX} ${adjustedTargetY}" fill="none" stroke="#154c27" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trace-3d-inactive-${panelId})"/>`;
+                    }
                 }
             }
         }
@@ -3557,9 +3666,9 @@ function generateSVGForSimulation(root, panelId = 'p') {
     const adjustedTraceEndY = (rootY === rootY) ? rootY + 0.5 : rootY; // prevent 0-height filter clip
     
     if (finalState) {
-        svgContent += `<path d="M ${rootOutX} ${rootY} L ${traceEndX} ${adjustedTraceEndY}" fill="none" stroke="#4ade80" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trace-3d-active-${panelId})"/>`;
+        svgContent += `<path id="output-trace-${panelId}" d="M ${rootOutX} ${rootY} L ${traceEndX} ${adjustedTraceEndY}" fill="none" stroke="#4ade80" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trace-3d-active-${panelId})"/>`;
     } else {
-        svgContent += `<path d="M ${rootOutX} ${rootY} L ${traceEndX} ${adjustedTraceEndY}" fill="none" stroke="#154c27" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trace-3d-inactive-${panelId})"/>`;
+        svgContent += `<path id="output-trace-${panelId}" d="M ${rootOutX} ${rootY} L ${traceEndX} ${adjustedTraceEndY}" fill="none" stroke="#154c27" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trace-3d-inactive-${panelId})"/>`;
     }
     
     // --- DRAW SILKSCREEN OUTLINES & SOLDER PADS ---
@@ -3580,7 +3689,12 @@ function generateSVGForSimulation(root, panelId = 'p') {
     }
 
     // --- DRAW COMPONENTS (ICs & Buttons) ---
+    // componentIdx walks posMap in the same order/index as the copper-traces
+    // loop above, so a given node gets the same index in both — toggleSimInput
+    // relies on that to find the right elements by id.
+    let componentIdx = 0;
     for (const [node, pos] of posMap.entries()) {
+        const myIdx = componentIdx++;
         const x = pos.x + dx;
         const y = pos.y + dy;
         const state = evaluateSimLogic(node);
@@ -3601,9 +3715,7 @@ function generateSVGForSimulation(root, panelId = 'p') {
                 const varName = node.value;
                 // Unpressed: cap floats above center. Pressed: cap sits at center.
                 const capCY = state ? y : y - 4;
-                const statusDot = state
-                    ? `<circle cx="${x+13}" cy="${y-13}" r="3.5" fill="#30d158" filter="url(#led-glow-small-${panelId})"/>`
-                    : `<circle cx="${x+13}" cy="${y-13}" r="3.5" fill="#ff453a" filter="url(#led-glow-small-${panelId})"/>`;
+                const statusDot = `<circle id="toggle-dot-${panelId}-${myIdx}" cx="${x+13}" cy="${y-13}" r="3.5" fill="${state ? '#30d158' : '#ff453a'}" filter="url(#led-glow-small-${panelId})"/>`;
                 svgContent += `
                     <g class="sim-toggle" data-var="${varName}" style="cursor:pointer;">
                         <!-- Solder legs -->
@@ -3612,7 +3724,7 @@ function generateSVGForSimulation(root, panelId = 'p') {
                         <!-- Housing (fixed) -->
                         <rect x="${x-22}" y="${y-22}" width="44" height="44" rx="6" fill="#151515" filter="url(#plastic-3d-${panelId})"/>
                         <!-- Cap circle -->
-                        <circle cx="${x}" cy="${capCY}" r="13" fill="#333" filter="url(#btn-cap-3d-${panelId})"/>
+                        <circle id="toggle-cap-${panelId}-${myIdx}" cx="${x}" cy="${capCY}" r="13" fill="#333" filter="url(#btn-cap-3d-${panelId})"/>
                         <!-- Status dot -->
                         ${statusDot}
                         <!-- Label -->
@@ -3646,9 +3758,9 @@ function generateSVGForSimulation(root, panelId = 'p') {
             // Active status LED on the IC itself (Centered on the gate body)
             const dotX = x - 5;
             if (state) {
-                svgContent += `<circle cx="${dotX}" cy="${y}" r="2.5" fill="#60ff60" filter="url(#led-glow-small-${panelId})"/>`;
+                svgContent += `<circle id="gate-dot-${panelId}-${myIdx}" cx="${dotX}" cy="${y}" r="2.5" fill="#60ff60" filter="url(#led-glow-small-${panelId})"/>`;
             } else {
-                svgContent += `<circle cx="${dotX}" cy="${y}" r="2.5" fill="#113311"/>`;
+                svgContent += `<circle id="gate-dot-${panelId}-${myIdx}" cx="${dotX}" cy="${y}" r="2.5" fill="#113311"/>`;
             }
         }
     }
@@ -3661,19 +3773,26 @@ function generateSVGForSimulation(root, panelId = 'p') {
     // LED legs removed — LED is a through-hole component, no legs shown
     
     // LED Base ring (plastic collar)
-    svgContent += `<ellipse cx="${ledX}" cy="${ledY}" rx="18" ry="18" fill="${finalState ? '#882200' : '#220000'}" filter="url(#plastic-3d-${panelId})"/>`;
+    svgContent += `<ellipse id="led-base-${panelId}" cx="${ledX}" cy="${ledY}" rx="18" ry="18" fill="${finalState ? '#882200' : '#220000'}" filter="url(#plastic-3d-${panelId})"/>`;
     
     // LED Dome
-    svgContent += `<circle cx="${ledX}" cy="${ledY}" r="15" fill="${finalState ? 'url(#led-on-' + panelId + ')' : 'url(#led-off-' + panelId + ')'}" filter="url(#btn-cap-3d-${panelId})"/>`;
+    svgContent += `<circle id="led-dome-${panelId}" cx="${ledX}" cy="${ledY}" r="15" fill="${finalState ? 'url(#led-on-' + panelId + ')' : 'url(#led-off-' + panelId + ')'}" filter="url(#btn-cap-3d-${panelId})"/>`;
     
-    // Ambient glow (yellow-orange, matches real LED colour)
-    if (finalState) {
-        svgContent += `<circle cx="${ledX}" cy="${ledY}" r="45" fill="#ffe000" opacity="0.35" filter="url(#led-glow-${panelId})" style="pointer-events: none;"/>`;
-    }
+    // Ambient glow (yellow-orange, matches real LED colour). Always present
+    // (opacity toggled) rather than conditionally appended, so a state flip
+    // is a single attribute write instead of an add/remove.
+    svgContent += `<circle id="led-glow-circle-${panelId}" cx="${ledX}" cy="${ledY}" r="45" fill="#ffe000" opacity="${finalState ? '0.35' : '0'}" filter="url(#led-glow-${panelId})" style="pointer-events: none;"/>`;
     
     // Silkscreen Label
     svgContent += `<text x="${ledX}" y="${ledY - 26}" font-family="Outfit,sans-serif" font-size="14" font-weight="900" fill="#ffffff" text-anchor="middle" stroke="#1A4E2C" stroke-width="3" paint-order="stroke fill">OUTPUT</text>`;
     
+    // Cache the layout (node positions + offsets) this render computed, keyed
+    // by panelId, so toggleSimInput can recolor the existing DOM in place on
+    // the next click instead of recomputing depth/positions and re-stringifying
+    // the whole SVG. Safe to key by insertion-order index because posMap is a
+    // Map — iterating it again later yields nodes in this exact same order.
+    _simLayoutCache[panelId] = { root, posMap, dx, dy };
+
     // Total SVG canvas must include the shadow overhang (10px right, 14px down)
     const svgW = width + 10;
     const svgH = height + 14;
