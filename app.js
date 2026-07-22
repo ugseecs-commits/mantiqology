@@ -1165,6 +1165,14 @@ elements.input.addEventListener('input', (e) => {
     if (clearBtn) {
         clearBtn.style.display = expr.trim() !== '' ? 'flex' : 'none';
     }
+
+    // Force select K-Map view if input matches KMAP(...) command
+    if (/^\s*KMAP\s*\(([^)]+)\)\s*$/i.test(expr)) {
+        const kmapNavBtn = document.getElementById('btn-view-kmap');
+        if (kmapNavBtn && wasmReady) {
+            kmapNavBtn.click();
+        }
+    }
     
     const appRoot = document.getElementById('app-root');
     if (appRoot) {
@@ -1203,6 +1211,8 @@ if (clearBtn) {
                 appRoot.classList.remove('showing-examples');
             }
             
+            window.history.replaceState(null, null, ' ');
+            
             if (wasmReady) {
                 Module.ccall('mantiq_setExpression', null, ['string'], ['']);
                 updateFrontend();
@@ -1213,6 +1223,46 @@ if (clearBtn) {
     });
 }
 
+// Logo click to return to landing page
+const heroLogoWrap = document.getElementById('hero-logo-wrap');
+if (heroLogoWrap) {
+    heroLogoWrap.addEventListener('click', (e) => {
+        e.preventDefault();
+        const appRoot = document.getElementById('app-root');
+        
+        // Only trigger if we aren't already on the landing page
+        if (appRoot && !appRoot.classList.contains('landing')) {
+            changeState(() => {
+                elements.input.value = '';
+                const cBtn = document.getElementById('clear-input-btn');
+                if (cBtn) cBtn.style.display = 'none';
+                
+                appRoot.classList.add('landing');
+                appRoot.classList.remove('showing-examples');
+                
+                window.history.replaceState(null, null, ' ');
+                
+                if (wasmReady) {
+                    Module.ccall('mantiq_setExpression', null, ['string'], ['']);
+                    updateFrontend();
+                }
+            });
+            // Intentionally not calling focus() here so the mobile keyboard doesn't randomly pop up
+        }
+    });
+}
+
+// Keyboard escape handlers
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        elements.altPopup.style.display = 'none';
+        document.getElementById('share-popup').style.display = 'none';
+        const formatGuidePopup = document.getElementById('format-guide-popup');
+        if (formatGuidePopup) formatGuidePopup.style.display = 'none';
+    }
+});
+
+ 
 // See Examples Button Morph
 const seeExamplesBtn = document.getElementById('see-examples-btn');
 if (seeExamplesBtn) {
@@ -1225,6 +1275,31 @@ if (seeExamplesBtn) {
             }
         });
         elements.input.focus();
+    });
+}
+
+// Learn Formats Modal Logic
+const learnFormatsBtn = document.getElementById('learn-formats-btn');
+const formatGuidePopup = document.getElementById('format-guide-popup');
+const formatGuideClose = document.getElementById('format-guide-close');
+
+if (learnFormatsBtn && formatGuidePopup) {
+    learnFormatsBtn.addEventListener('click', () => {
+        formatGuidePopup.style.display = 'flex';
+    });
+}
+
+if (formatGuideClose && formatGuidePopup) {
+    formatGuideClose.addEventListener('click', () => {
+        formatGuidePopup.style.display = 'none';
+    });
+}
+
+if (formatGuidePopup) {
+    formatGuidePopup.addEventListener('click', (e) => {
+        if (e.target === formatGuidePopup) {
+            formatGuidePopup.style.display = 'none';
+        }
     });
 }
 // SOP / POS Pill Toggle
@@ -1295,24 +1370,16 @@ if (solutionTypePill) {
     });
 }
 
-// K-Map View Mode Pill Toggle (Normal / Wrap / 3D). renderHTMLKMap() only
-// ever synced this pill's visual state FROM kmapViewMode - nothing ever
-// listened for a click and fed a change back INTO kmapViewMode, so the
-// button looked interactive but never actually switched the view.
-if (elements.kmapViewPill) {
-    elements.kmapViewPill.addEventListener('click', (e) => {
-        const targetOption = e.target.closest('.pill-option');
-        if (!targetOption) return;
-
-        const newVal = targetOption.getAttribute('data-val');
-        if (!newVal || newVal === kmapViewMode) return;
-
-        kmapViewMode = newVal;
-        elements.kmapViewPill.setAttribute('data-state', kmapViewMode);
-        elements.kmapViewPill.querySelectorAll('.pill-option').forEach(opt => {
-            opt.classList.toggle('active', opt.getAttribute('data-val') === kmapViewMode);
-        });
-
+// K-Map View Mode Toggle (Normal / Wrap / 3D).
+const kmapViewToggleBtn = document.getElementById('kmap-view-toggle-btn');
+if (kmapViewToggleBtn) {
+    kmapViewToggleBtn.addEventListener('click', () => {
+        const numVars = lastKMapData ? lastKMapData.variables.length : 0;
+        if (kmapViewMode === 'normal') {
+            kmapViewMode = numVars <= 4 ? 'wrap' : '3d';
+        } else {
+            kmapViewMode = 'normal';
+        }
         renderHTMLKMap();
     });
 }
@@ -1795,7 +1862,9 @@ function renderHTMLWaveform(data) {
         const y = areaY + v * slotH;
         const varName = data.variables[v];
         
-        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#0f172a';
+        const isDark = !document.body.classList.contains('light-mode');
+        const defaultText = isDark ? '#f8fafc' : '#0f172a';
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || defaultText;
         ctx.textAlign = 'left';
         ctx.fillText(varName, pad, y + signalH / 2);
         
@@ -3864,14 +3933,22 @@ let lastKMapData = null;
 
 // KMap Colors for loops
 const LOOP_COLORS = [
-    '#FF3B30', // Red
-    '#34C759', // Green
     '#007AFF', // Blue
+    '#34C759', // Green
+    '#FF3B30', // Red
     '#FF9500', // Orange
     '#AF52DE', // Purple
     '#5856D6', // Indigo
     '#FF2D55', // Pink
-    '#5AC8FA'  // Teal
+    '#5AC8FA', // Teal
+    '#FFCC00', // Yellow
+    '#00C7BE', // Cyan
+    '#A2845E', // Brown
+    '#FF6B22', // Coral
+    '#E586C6', // Mauve
+    '#8D99AE', // Slate
+    '#4B8A08', // Dark Green
+    '#B53A15'  // Rust
 ];
 
 // Cell size (px) used only by the infinite Wrap view. Kept smaller than the
@@ -3938,24 +4015,28 @@ function renderHTMLKMap() {
         if (!stillValid) _selectedImplicantTerm = null;
     }
 
-    // Setup K-Map view pill state
-    const kmapAltBtn = document.getElementById('kmap-alt-toggle-btn');
-    if (kmapAltBtn && elements.kmapViewPill) {
+    // Setup K-Map view toggle button state
+    const kmapViewToggleBtn = document.getElementById('kmap-view-toggle-btn');
+    if (kmapViewToggleBtn) {
         if (numVars <= 4) {
-            kmapAltBtn.textContent = 'Wrap';
-            kmapAltBtn.setAttribute('data-val', 'wrap');
             if (kmapViewMode === '3d') kmapViewMode = 'wrap';
             if (kmapViewMode !== 'normal' && kmapViewMode !== 'wrap') kmapViewMode = 'normal';
+            
+            kmapViewToggleBtn.title = kmapViewMode === 'normal' ? 'Switch to Wrap View' : 'Switch to Normal View';
+            kmapViewToggleBtn.innerHTML = kmapViewMode === 'normal' 
+                ? '<span style="font-family: \'Outfit\', sans-serif; font-size: 11px; font-weight: 700;">WRP</span>'
+                : '<span style="font-family: \'Outfit\', sans-serif; font-size: 11px; font-weight: 700;">2D</span>';
+            kmapViewToggleBtn.classList.toggle('active', kmapViewMode === 'wrap');
         } else {
-            kmapAltBtn.textContent = '3D';
-            kmapAltBtn.setAttribute('data-val', '3d');
             if (kmapViewMode === 'wrap') kmapViewMode = '3d';
             if (kmapViewMode !== 'normal' && kmapViewMode !== '3d') kmapViewMode = 'normal';
+
+            kmapViewToggleBtn.title = kmapViewMode === 'normal' ? 'Switch to 3D View' : 'Switch to 2D View';
+            kmapViewToggleBtn.innerHTML = kmapViewMode === 'normal'
+                ? '<span style="font-family: \'Outfit\', sans-serif; font-size: 11px; font-weight: 700;">3D</span>'
+                : '<span style="font-family: \'Outfit\', sans-serif; font-size: 11px; font-weight: 700;">2D</span>';
+            kmapViewToggleBtn.classList.toggle('active', kmapViewMode === '3d');
         }
-        elements.kmapViewPill.setAttribute('data-state', kmapViewMode);
-        elements.kmapViewPill.querySelectorAll('.pill-option').forEach(opt => {
-            opt.classList.toggle('active', opt.getAttribute('data-val') === kmapViewMode);
-        });
     }
 
     renderKMapAnalysis(activeSolution, isSOP, variables);
@@ -4476,7 +4557,7 @@ function renderMultiple2DKMaps(numVars, variables, minterms, dontCares, activeSo
         const planeName = zVars.map((v, idx) => `${v}=${zPrefix[idx]}`).join(', ');
         
         html += `<div class="kmap-plane-wrapper" style="text-align:center;">`;
-        html += `<div style="font-weight:bold; margin-bottom:-4px; color:var(--accent);">${planeName}</div>`;
+        html += `<div style="font-weight:bold; margin-bottom: 10px; color:var(--accent);">${planeName}</div>`;
         html += '<table class="kmap-table" style="margin: 0 auto;">';
         html += `<tr><th class="kmap-corner" style="position: relative; padding: 0; min-width: 40px; height: 40px;"><svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"><line x1="0" y1="0" x2="100%" y2="100%" stroke="var(--border)" stroke-width="1.5" /></svg><div class="kmap-corner-col">${colVars.join('')}</div><div class="kmap-corner-row">${rowVars.join('')}</div></th>`;
         for (let c of colGray) { html += `<th style="height: 40px; vertical-align: bottom; padding-bottom: 2px;">${c}</th>`; }
@@ -4577,18 +4658,22 @@ function renderKMapAnalysis(solution, isSOP, variables) {
         }
     }
 
-    // Small helper: one card = icon badge + uppercase label (+ optional
-    // count chip) + body. Mirrors the Solution tab's .qm-section pattern so
-    // this board reads as part of the same app instead of its own style.
-    const card = (iconCls, iconText, title, count, bodyHtml) => `
-        <div class="kmap-analysis-section">
-            <div class="kmap-analysis-header">
-                <div class="kmap-analysis-icon ${iconCls}">${iconText}</div>
+    // Small helper: one card = uppercase label (+ optional count chip) + body.
+    const card = (iconCls, iconText, title, count, bodyHtml) => {
+        // Only Minimal Expression stays expanded by default; Canonical, EPI, and NEPI start collapsed
+        const isOpen = iconCls === 'minimal' ? 'open' : '';
+        return `
+        <details class="kmap-analysis-section" ${isOpen}>
+            <summary class="kmap-analysis-header">
                 <span class="kmap-analysis-title">${title}</span>
                 ${count != null ? `<span class="kmap-analysis-count">${count}</span>` : ''}
+                <svg class="kmap-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </summary>
+            <div class="kmap-analysis-body">
+                ${bodyHtml}
             </div>
-            ${bodyHtml}
-        </div>`;
+        </details>`;
+    };
 
     let cardsHtml = '';
 
@@ -4755,6 +4840,14 @@ function render3DKMap(numVars, variables, minterms, dontCares, activeSolution, i
     wrapper3d.style.display = 'block';
     if (wrapContainer) wrapContainer.style.display = 'none';
 
+    // Capture the outgoing lattice's numVars BEFORE tearing anything down -
+    // _stopKmap3DAnimLoops() below wipes kmap3DState._ctx as part of its
+    // cleanup, so reading it any later would always see null and make the
+    // "did the shape actually change" check further down always true,
+    // resetting the user's zoom/pan on every re-render (e.g. every cell
+    // click), not just on a genuine numVars change.
+    const prevNumVars = kmap3DState._ctx ? kmap3DState._ctx.numVars : null;
+
     _stopKmap3DAnimLoops();
     wrapper3d.innerHTML = '';
 
@@ -4795,7 +4888,6 @@ function render3DKMap(numVars, variables, minterms, dontCares, activeSolution, i
     // first time this view is built, or when the lattice's shape actually
     // changes (numVars changed, e.g. switching between a 4-var and 5-var
     // K-map), since the fit radius depends on that shape.
-    const prevNumVars = kmap3DState._ctx ? kmap3DState._ctx.numVars : null;
     if (prevNumVars === null || prevNumVars !== numVars) {
         kmap3DState._rot.radius = _getKMap3DFitRadius(width, height);
     }
@@ -4856,12 +4948,14 @@ function render3DKMap(numVars, variables, minterms, dontCares, activeSolution, i
                     side: THREE.DoubleSide
                 });
                 const mesh = new THREE.Mesh(cubeGeo, material);
+                mesh.visible = !kmap3DState.wireframeOnly;
 
                 // Shown only in wireframe-only mode; normal mode uses a faint neutral outline instead.
                 const edges = _makeThickCubeEdges(edgesGeo, boxColor, 0.65);
                 edges.visible = false;
 
                 const outline = _makeThickCubeEdges(edgesGeo, 0xffffff, 0.45);
+                outline.visible = !kmap3DState.wireframeOnly;
 
                 const sphereMat = new THREE.MeshStandardMaterial({ color: stateColor, roughness: 0.35, metalness: 0.1 });
                 const sphere = new THREE.Mesh(sphereGeo, sphereMat);

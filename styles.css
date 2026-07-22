@@ -394,9 +394,9 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    background: radial-gradient(circle at center, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    background: var(--bg-primary);
     height: 100%;
-    width: 100%;
+      width: 100%;
 }
 
 #topbar {
@@ -433,6 +433,11 @@ body {
     align-items: center;
     gap: 10px;
     margin-bottom: 0;
+    cursor: pointer;
+    position: relative;
+    z-index: 50;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
 }
 
 #app-root.landing #hero-logo-wrap {
@@ -444,13 +449,13 @@ body {
 #hero-logo {
     width: 64px;
     height: 64px;
-    filter: drop-shadow(0 4px 10px rgba(37, 99, 235, 0.25));
+    filter: none;
 }
 
 #app-root.landing #hero-logo {
     width: 220px;
     height: 220px;
-    filter: drop-shadow(0 12px 36px rgba(37, 99, 235, 0.35));
+    filter: none;
 }
 
 /* Search Area Wrap */
@@ -692,7 +697,7 @@ body {
     font-size: 16px;
     font-weight: 500;
     letter-spacing: 0.2px;
-    padding: 11px 76px 11px 48px;
+    padding: 11px 76px 11px 24px;
     border-radius: 24px;
     outline: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -705,13 +710,9 @@ body {
     background-color: var(--bg-secondary);
 }
 
-#expression-input:focus ~ .search-icon {
-    color: var(--accent);
-}
-
 #app-root.landing #expression-input {
     border-radius: 28px;
-    padding: 16px 86px 16px 54px;
+    padding: 16px 86px 16px 28px;
     font-size: 18px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -867,17 +868,26 @@ body {
     background-color: var(--success);
 }
 
-/* "See Examples" button - centered below search on landing */
-#see-examples-btn {
+/* Bottom links on landing */
+.topbar-bottom-links {
     display: none;
+    gap: 12px;
+    margin-top: 24px;
+    justify-content: center;
+}
+
+#app-root.landing .topbar-bottom-links {
+    display: flex;
+}
+
+.landing-link-btn {
     background: none;
     border: none;
     color: var(--text-muted);
     font-size: 13.5px;
     font-weight: 500;
     letter-spacing: 0.5px;
-    margin-top: 24px;
-    padding: 6px 14px;
+    padding: 6px 16px;
     cursor: pointer;
     transition: var(--transition-fast);
     border-radius: 18px;
@@ -885,14 +895,86 @@ body {
     background-color: rgba(255, 255, 255, 0.02);
 }
 
-#see-examples-btn:hover {
+.landing-link-btn:hover {
     color: var(--accent);
     background-color: var(--accent-light);
     border-color: rgba(37, 99, 235, 0.2);
 }
 
-#app-root.landing #see-examples-btn {
-    display: inline-block;
+/* Format Guide Modal Styles */
+.format-modal {
+    max-width: 650px;
+    height: 80%;
+    max-height: 700px;
+}
+
+.format-guide-body {
+    padding: 24px;
+    gap: 28px;
+}
+
+.guide-section {
+    display: flex;
+    flex-direction: column;
+}
+
+.guide-section h3 {
+    font-size: 16px;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+
+.guide-section p {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+    line-height: 1.5;
+}
+
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+}
+
+.guide-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 13.5px;
+}
+
+.guide-table th {
+    background-color: rgba(255,255,255,0.03);
+    padding: 10px 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.guide-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+
+.guide-table tr:last-child td {
+    border-bottom: none;
+}
+
+.guide-table code {
+    background-color: var(--bg-primary);
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    white-space: nowrap;
 }
 
 /* SOP/POS toggle button style */
@@ -1996,22 +2078,22 @@ canvas.emscripten {
     box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.1);
 }
 
-/* Sleek custom scrollbars for code boxes */
-.code-scroll-wrapper::-webkit-scrollbar {
+/* Sleek custom scrollbars globally (matches Verilog code boxes) */
+::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
 
-.code-scroll-wrapper::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
     background: transparent;
 }
 
-.code-scroll-wrapper::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
     background: var(--border);
     border-radius: 4px;
 }
 
-.code-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
 }
 
@@ -2319,12 +2401,33 @@ canvas.emscripten {
     color: #fff;
     border-color: var(--error);
 }
-.kmap-table { border-collapse: collapse; margin: 20px auto; width: auto; }
+.kmap-table { border-collapse: collapse; margin: 20px auto; width: auto; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); }
 .kmap-cell { border: 1px solid var(--border); width: 60px; height: 60px; min-width: 60px; min-height: 60px; text-align: center; vertical-align: middle; cursor: pointer; user-select: none; transition: background 0.2s; font-family: monospace; font-size: 1.2rem; box-sizing: border-box; }  
 @media (hover: hover) and (pointer: fine) {
     .kmap-cell:hover { background-color: var(--accent-light); }
 }
 .kmap-table th { padding: 10px; font-weight: bold; background: var(--bg-primary); min-width: 60px; height: 60px; text-align: center; vertical-align: middle; box-sizing: border-box; } 
+
+/* Rounded outer corners for the K-map grid. border-collapse merges adjacent
+   cell borders into shared lines, so the radius has to be applied to the
+   four outermost cells themselves (not the <table>) or the collapsed
+   border would still draw a hard square corner underneath the clip. */
+.kmap-table tr:first-child th.kmap-corner { border-top-left-radius: 14px; }
+.kmap-table tr:first-child th:last-child { border-top-right-radius: 14px; }
+.kmap-table tr:last-child th:first-child { border-bottom-left-radius: 14px; }
+.kmap-table tr:last-child td.kmap-cell:last-child { border-bottom-right-radius: 14px; }
+
+.kmap-small { border-radius: 10px; }
+.kmap-small.kmap-table,
+.kmap-small .kmap-table { border-radius: 10px; }
+.kmap-small.kmap-table tr:first-child th.kmap-corner,
+.kmap-small .kmap-table tr:first-child th.kmap-corner { border-top-left-radius: 10px; }
+.kmap-small.kmap-table tr:first-child th:last-child,
+.kmap-small .kmap-table tr:first-child th:last-child { border-top-right-radius: 10px; }
+.kmap-small.kmap-table tr:last-child th:first-child,
+.kmap-small .kmap-table tr:last-child th:first-child { border-bottom-left-radius: 10px; }
+.kmap-small.kmap-table tr:last-child td.kmap-cell:last-child,
+.kmap-small .kmap-table tr:last-child td.kmap-cell:last-child { border-bottom-right-radius: 10px; }
   
 #kmap-visual-wrapper { position: relative; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; }  
 #kmap-svg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; } 
@@ -2370,10 +2473,16 @@ canvas.emscripten {
     position: relative;
 }
 
-.kmap-fs-btn {
+.kmap-controls {
     position: absolute;
     bottom: 14px;
     right: 14px;
+    display: flex;
+    gap: 8px;
+    z-index: 55;
+}
+
+.kmap-fs-btn {
     width: 32px;
     height: 32px;
     display: flex;
@@ -2384,7 +2493,6 @@ canvas.emscripten {
     border-radius: 6px;
     color: var(--text-secondary);
     cursor: pointer;
-    z-index: 55;
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
@@ -2420,12 +2528,15 @@ canvas.emscripten {
     overflow: auto;
 }
 
-/* Detach the button from the scrolling content so it always stays on screen */
-.kmap-panel.kmap-panel-fullscreen .kmap-fs-btn {
+/* Detach the controls from the scrolling content so they always stay on screen */
+.kmap-panel.kmap-panel-fullscreen .kmap-controls {
     position: fixed;
     bottom: 24px;
     right: 24px;
     z-index: 1501;
+}
+
+.kmap-panel.kmap-panel-fullscreen .kmap-fs-btn {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
@@ -2442,31 +2553,37 @@ canvas.emscripten {
     padding: 14px;
 }
 
+.kmap-analysis-section[open] .kmap-chevron {
+    transform: rotate(180deg);
+}
+
 .kmap-analysis-header {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 12px;
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
 }
 
-.kmap-analysis-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 7px;
-    font-size: 12px;
-    font-weight: 700;
-    font-family: 'Fira Code', 'JetBrains Mono', monospace;
+.kmap-analysis-header::-webkit-details-marker {
+    display: none;
+}
+
+.kmap-analysis-header::marker {
+    content: '';
+}
+
+.kmap-chevron {
+    margin-left: auto;
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
     flex-shrink: 0;
 }
 
-.kmap-analysis-icon.canonical-sop { background-color: var(--accent-light); color: var(--sop-color, var(--accent)); }
-.kmap-analysis-icon.canonical-pos { background-color: rgba(124, 58, 237, 0.15); color: var(--pos-color, #7c3aed); }
-.kmap-analysis-icon.minimal { background-color: rgba(255, 149, 0, 0.15); color: #FF9500; }
-.kmap-analysis-icon.epi { background-color: rgba(175, 82, 222, 0.15); color: #AF52DE; }
-.kmap-analysis-icon.nepi { background-color: var(--accent-light); color: var(--accent); }
+.kmap-analysis-body {
+    padding-top: 12px;
+}
 
 .kmap-analysis-title {
     font-size: 11.5px;
@@ -3174,5 +3291,30 @@ canvas.emscripten {
     .modal {
         width: 94%;
         height: 86%;
+    }
+}
+
+/* ==========================================================================
+   Dark Mode K-Map Color Swap
+   ========================================================================== */
+body:not(.light-mode) .kmap-table th {
+    background: var(--bg-secondary);
+}
+
+body:not(.light-mode) .kmap-table th.kmap-corner,
+body:not(.light-mode) .kmap-corner,
+body:not(.light-mode) #wrap-top-header,
+body:not(.light-mode) #wrap-left-header {
+    background: var(--bg-secondary) !important;
+}
+
+body:not(.light-mode) .kmap-cell {
+    background-color: var(--bg-primary);
+}
+
+/* Ensure hover effect is maintained for the new cell color */
+@media (hover: hover) and (pointer: fine) {
+    body:not(.light-mode) .kmap-cell:hover {
+        background-color: var(--accent-light);
     }
 }
