@@ -1788,6 +1788,13 @@ canvas.emscripten {
     flex-shrink: 0;
 }
 
+.kmap-solutions-wrapper {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
 .panel-header h2 {
     font-size: 18px;
     font-weight: 600;
@@ -2422,8 +2429,97 @@ canvas.emscripten {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-.term-boxes-container { display: flex; flex-wrap: wrap; gap: 8px; }
-.term-box { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; border-radius: 4px; background: var(--bg-tertiary); border: 1px solid var(--border); font-family: 'Fira Code', monospace; font-size: 14px; color: var(--text-primary); }
+/* ── K-Map Analysis Board ─────────────────────────────────────────────────
+   Cards mirror the Solution tab's .qm-section pattern (small uppercase
+   label + colored icon badge) so the K-map tab reads as part of the same
+   product instead of the old ad-hoc inline-styled headers. */
+.kmap-analysis-board { display: flex; flex-direction: column; gap: 12px; }
+
+.kmap-analysis-section {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+}
+
+.kmap-analysis-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.kmap-analysis-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'Fira Code', 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+}
+
+.kmap-analysis-icon.canonical-sop { background-color: var(--accent-light); color: var(--sop-color, var(--accent)); }
+.kmap-analysis-icon.canonical-pos { background-color: rgba(124, 58, 237, 0.15); color: var(--pos-color, #7c3aed); }
+.kmap-analysis-icon.minimal { background-color: rgba(255, 149, 0, 0.15); color: #FF9500; }
+.kmap-analysis-icon.epi { background-color: rgba(175, 82, 222, 0.15); color: #AF52DE; }
+.kmap-analysis-icon.nepi { background-color: var(--accent-light); color: var(--accent); }
+
+.kmap-analysis-title {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    flex-grow: 1;
+}
+
+.kmap-analysis-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 6px;
+    flex-shrink: 0;
+}
+
+.kmap-analysis-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: -4px 0 10px 0;
+}
+
+.kmap-analysis-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 12.5px;
+    padding: 2px 0;
+}
+
+.empty-msg {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    min-height: 80px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+
+.term-boxes-container { display: flex; flex-wrap: wrap; gap: 6px; }
+.term-box { display: inline-flex; align-items: center; justify-content: center; padding: 4px 9px; border-radius: 6px; background: var(--bg-tertiary); border: 1px solid var(--border); font-family: 'Fira Code', monospace; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+.kmap-analysis-section .term-box { background: var(--bg-primary); }
 
 /* Analysis board: Minimal Expression + Essential Prime Implicant boxes are
    clickable — selecting one filters the K-map (every view mode) down to
@@ -2996,6 +3092,15 @@ canvas.emscripten {
         flex: 1;
         min-height: 0;
         overflow-y: auto;
+    }
+
+    .kmap-analysis-section {
+        padding: 11px;
+        border-radius: 9px;
+    }
+
+    .kmap-analysis-board {
+        gap: 10px;
     }
 
     /* Tighter panel chrome to fit small screens */

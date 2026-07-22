@@ -4577,56 +4577,68 @@ function renderKMapAnalysis(solution, isSOP, variables) {
         }
     }
 
-    let html = '';
+    // Small helper: one card = icon badge + uppercase label (+ optional
+    // count chip) + body. Mirrors the Solution tab's .qm-section pattern so
+    // this board reads as part of the same app instead of its own style.
+    const card = (iconCls, iconText, title, count, bodyHtml) => `
+        <div class="kmap-analysis-section">
+            <div class="kmap-analysis-header">
+                <div class="kmap-analysis-icon ${iconCls}">${iconText}</div>
+                <span class="kmap-analysis-title">${title}</span>
+                ${count != null ? `<span class="kmap-analysis-count">${count}</span>` : ''}
+            </div>
+            ${bodyHtml}
+        </div>`;
 
-    const drawDivider = () => `<div style="height:1px; background:var(--border); margin: 15px 0;"></div>`;
+    let cardsHtml = '';
 
     // 1. Canonical Form
-    html += `<h3 style="color:${isSOP ? 'var(--success)' : 'var(--error)'}; font-size:16px; margin:0 0 10px 0;">Canonical Form (S${isSOP ? 'SOP' : 'POS'}):</h3>`;
     if (isSOP) {
-        html += `<div style="margin-bottom:10px; font-weight:bold; color:var(--text-secondary);">Sum m(${minterms.join(', ')})</div>`;
         const literals = minterms.map(m => {
             let bin = m.toString(2).padStart(numVars, '0');
             return binaryToVariables(bin, variables, false);
         });
-        html += `<div class="term-boxes-container">${literals.map(l => `<span class="term-box">${l}</span>`).join('')}</div>`;
+        const body = `
+            <div class="kmap-analysis-subtitle">Σm(${minterms.join(', ')})</div>
+            <div class="term-boxes-container">${literals.map(l => `<span class="term-box">${l}</span>`).join('')}</div>`;
+        cardsHtml += card('canonical-sop', 'Σ', 'Canonical Form (SOP)', minterms.length, body);
     } else {
-        html += `<div style="margin-bottom:10px; font-weight:bold; color:var(--text-secondary);">Prod M(${maxterms.join(', ')})</div>`;
         const literals = maxterms.map(m => {
             let bin = m.toString(2).padStart(numVars, '0');
             return binaryToVariables(bin, variables, true);
         });
-        html += `<div class="term-boxes-container">${literals.map(l => `<span class="term-box">${l}</span>`).join('')}</div>`;
+        const body = `
+            <div class="kmap-analysis-subtitle">Πm(${maxterms.join(', ')})</div>
+            <div class="term-boxes-container">${literals.map(l => `<span class="term-box">${l}</span>`).join('')}</div>`;
+        cardsHtml += card('canonical-pos', 'Π', 'Canonical Form (POS)', maxterms.length, body);
     }
-
-    html += drawDivider();
 
     // 2. Minimal Expression
-    html += `<h3 style="color:#FF9500; font-size:16px; margin:0 0 10px 0;">Minimal Expression:</h3>`;
-    if (!solution || solution.length === 0) {
-        html += `<div style="color:var(--text-muted); font-style:italic; padding-left:4px;">0</div>`;
-    } else {
-        let colorIdx = 0;
-        const solutionHtml = solution.map(term => {
-            const color = LOOP_COLORS[colorIdx % LOOP_COLORS.length];
-            colorIdx++;
-            const literal = binaryToVariables(term, variables, !isSOP);
-            const isSelected = term === _selectedImplicantTerm;
-            const isDimmed = _selectedImplicantTerm !== null && !isSelected;
-            const cls = `term-box selectable-implicant${isSelected ? ' selected' : ''}${isDimmed ? ' dimmed' : ''}`;
-            return `<span class="${cls}" data-term="${term}" onclick="selectImplicantGroup('${term}')" style="border:1px solid ${color}; color:${color}; background:${color}20;">${literal}</span>`;
-        }).join('');
-        html += `<div class="term-boxes-container">${solutionHtml}</div>`;
+    {
+        let minimalBody;
+        if (!solution || solution.length === 0) {
+            minimalBody = `<div class="kmap-analysis-empty">0</div>`;
+        } else {
+            let colorIdx = 0;
+            const solutionHtml = solution.map(term => {
+                const color = LOOP_COLORS[colorIdx % LOOP_COLORS.length];
+                colorIdx++;
+                const literal = binaryToVariables(term, variables, !isSOP);
+                const isSelected = term === _selectedImplicantTerm;
+                const isDimmed = _selectedImplicantTerm !== null && !isSelected;
+                const cls = `term-box selectable-implicant${isSelected ? ' selected' : ''}${isDimmed ? ' dimmed' : ''}`;
+                return `<span class="${cls}" data-term="${term}" onclick="selectImplicantGroup('${term}')" style="border:1px solid ${color}; color:${color}; background:${color}20;">${literal}</span>`;
+            }).join('');
+            minimalBody = `<div class="term-boxes-container">${solutionHtml}</div>`;
+        }
+        cardsHtml += card('minimal', '∴', 'Minimal Expression', solution ? solution.length : 0, minimalBody);
     }
-
-    html += drawDivider();
 
     // 3. Prime Implicants
     const activePIs = isSOP ? primeImplicants : primeImplicantsPOS;
     const activeEPIs = isSOP ? essentialPrimeImplicants : essentialPrimeImplicantsPOS;
-    
+
     if (activeEPIs && activeEPIs.length > 0) {
-        html += `<h3 style="color:#AF52DE; font-size:16px; margin:0 0 10px 0;">Essential Prime Implicants:</h3>`;
         const epiHtml = activeEPIs.map(epi => {
             const literal = binaryToVariables(epi, variables, !isSOP);
             const isSelected = epi === _selectedImplicantTerm;
@@ -4634,25 +4646,23 @@ function renderKMapAnalysis(solution, isSOP, variables) {
             const cls = `term-box selectable-implicant${isSelected ? ' selected' : ''}${isDimmed ? ' dimmed' : ''}`;
             return `<span class="${cls}" data-term="${epi}" onclick="selectImplicantGroup('${epi}')" style="border:1px solid #AF52DE; color:#AF52DE;">${literal}</span>`;
         }).join('');
-        html += `<div class="term-boxes-container">${epiHtml}</div>`;
+        cardsHtml += card('epi', 'EPI', 'Essential Prime Implicants', activeEPIs.length, `<div class="term-boxes-container">${epiHtml}</div>`);
     }
 
     let nonEPIs = [];
     if (activePIs) {
         nonEPIs = activePIs.filter(pi => !activeEPIs.includes(pi));
     }
-    
+
     if (nonEPIs && nonEPIs.length > 0) {
-        if (activeEPIs && activeEPIs.length > 0) html += `<div style="height:15px;"></div>`;
-        html += `<h3 style="color:#007AFF; font-size:16px; margin:0 0 10px 0;">Non-Essential Prime Implicants:</h3>`;
         const nepiHtml = nonEPIs.map(nepi => {
             const literal = binaryToVariables(nepi, variables, !isSOP);
             return `<span class="term-box" style="border:1px solid #007AFF; color:#007AFF;">${literal}</span>`;
         }).join('');
-        html += `<div class="term-boxes-container">${nepiHtml}</div>`;
+        cardsHtml += card('nepi', 'PI', 'Non-Essential Prime Implicants', nonEPIs.length, `<div class="term-boxes-container">${nepiHtml}</div>`);
     }
 
-    list.innerHTML = `<div style="padding:15px;">${html}</div>`;
+    list.innerHTML = `<div class="kmap-analysis-board">${cardsHtml}</div>`;
 }
 
 // ── 3D K-Map: a real WebGL cube lattice (Three.js) ───────────────────────────
