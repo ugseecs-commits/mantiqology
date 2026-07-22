@@ -2366,11 +2366,20 @@ canvas.emscripten {
     top: 0;
     left: 0;
     width: 100vw !important;
-    height: 100vh !important;
+    height: 100dvh !important;
     max-height: none !important;
     z-index: 1500;
     border-radius: 0;
     overflow: auto;
+}
+
+/* Detach the button from the scrolling content so it always stays on screen */
+.kmap-panel.kmap-panel-fullscreen .kmap-fs-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1501;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 .term-boxes-container { display: flex; flex-wrap: wrap; gap: 8px; }
