@@ -151,10 +151,24 @@ body {
     display: none;
 }
 
-#app-root.landing #canvas-container,
 #app-root.landing #workspace-footer,
 #app-root.showing-examples #workspace-footer {
     display: none;
+}
+
+/* Belt-and-suspenders: while on the landing screen, force every
+   main-workspace view container hidden regardless of the view-hidden
+   class JS happens to have set. This prevents a startup/clear-input
+   race (mantiq_setView firing before the landing class settles) from
+   leaving simulation/circuit/etc. panels visible behind the hero. */
+#app-root.landing #canvas,
+#app-root.landing #truthtable-container,
+#app-root.landing #kmap-container,
+#app-root.landing #solution-container,
+#app-root.landing #verilog-container,
+#app-root.landing #svg-circuit-container,
+#app-root.landing #simulation-container {
+    display: none !important;
 }
 
 /* ==========================================================================
@@ -306,7 +320,12 @@ body {
 }
 
 /* Topbar in landing mode */
-#app-root.landing #topbar {
+#app-root.landing #topbar,
+#app-root.showing-examples #topbar {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    justify-self: center;
+    align-self: center;
     background: transparent;
     backdrop-filter: none;
     border-bottom: none;
@@ -315,7 +334,6 @@ body {
     align-items: center;
     width: min(640px, 90vw);
     margin: 0;
-    margin-left: 0;
     padding: 0;
     gap: 0;
 }

@@ -1901,6 +1901,17 @@ function handleViewChange(viewMode) {
     // type (grid/flex/block), so we only ever toggle a class here.
     Object.values(views).forEach(el => el && el.classList.add('view-hidden'));
 
+    // While the app is showing the landing screen (no expression loaded
+    // yet), never reveal a view container. Without this, the unconditional
+    // mantiq_setView(0) call at startup (and the view-mode cache firing
+    // through syncLoop) un-hides the simulation panels before an
+    // expression exists, and they render behind the centered hero/search
+    // bar. Same risk applies when the input is cleared back to landing.
+    const appRootEl = document.getElementById('app-root');
+    if (appRootEl && appRootEl.classList.contains('landing')) {
+        return;
+    }
+
     const show = (key) => { if (views[key]) views[key].classList.remove('view-hidden'); };
 
     if (viewMode === 3) {

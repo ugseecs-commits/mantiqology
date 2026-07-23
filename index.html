@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover"/>
     <link rel="manifest" href="manifest.json">
     <title>Mantiq — Logic Circuit Visualizer</title>
-    <link rel="stylesheet" href="styles.css?v=1.0.11">
+    <link rel="stylesheet" href="styles.css?v=1.0.12">
     <!-- Google Fonts for premium typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,10 +27,11 @@
             <div class="nav-links">
                 <button class="nav-btn active" data-view="0" id="btn-view-sim">
                     <div class="nav-icon-wrapper">
-                        <!-- Lightbulb -->
+                        <!-- Lightbulb (Shifted down, padded to avoid cropping) -->
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M15 14c.2-1 .7-1.7 1.5-2.5C17.9 10.3 19 8.8 19 7a7 7 0 0 0-14 0c0 1.8 1.1 3.3 2.5 4.5.8.8 1.3 1.5 1.5 2.5"/>
-                            <path d="M9 18h6M10 22h4"/>
+                            <path d="M15 15c.2-.8.5-1.4 1.2-2C17.2 12.1 18 10.7 18 9a6 6 0 0 0-12 0c0 1.7.8 3.1 1.8 4 .7.6 1 1.2 1.2 2"/>
+                            <line x1="9" y1="18" x2="15" y2="18"/>
+                            <line x1="10" y1="21" x2="14" y2="21"/>
                         </svg>
                     </div>
                     <span class="tooltip">Simulation</span>
@@ -49,19 +50,26 @@
                 </button>
                 <button class="nav-btn" data-view="4" id="btn-view-verilog">
                     <div class="nav-icon-wrapper">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        <!-- Verilog: </> -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="16 18 22 12 16 6"/>
+                            <polyline points="8 6 2 12 8 18"/>
+                            <line x1="10" y1="18" x2="14" y2="6"/>
+                        </svg>
                     </div>
                     <span class="tooltip">Verilog Gen</span>
                 </button>
                 <button class="nav-btn" data-view="2" id="btn-view-kmap">
                     <div class="nav-icon-wrapper">
-                        <!-- K-Map: 3×3 grid -->
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                        <!-- 2x2 K-Map with 0, 1, 1, 0 inside -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="3" width="18" height="18" rx="1.5"/>
-                            <line x1="3" y1="10" x2="21" y2="10"/>
-                            <line x1="3" y1="17" x2="21" y2="17"/>
-                            <line x1="10" y1="3" x2="10" y2="21"/>
-                            <line x1="17" y1="3" x2="17" y2="21"/>
+                            <line x1="12" y1="3" x2="12" y2="21"/>
+                            <line x1="3" y1="12" x2="21" y2="12"/>
+                            <text x="7.5" y="8.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" text-anchor="middle" font-family="'Outfit', sans-serif">0</text>
+                            <text x="16.5" y="8.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" text-anchor="middle" font-family="'Outfit', sans-serif">1</text>
+                            <text x="7.5" y="17.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" text-anchor="middle" font-family="'Outfit', sans-serif">1</text>
+                            <text x="16.5" y="17.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" text-anchor="middle" font-family="'Outfit', sans-serif">0</text>
                         </svg>
                     </div>
                     <span class="tooltip">K-Map Analysis</span>
@@ -619,6 +627,6 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="app.js?v=1.1.0"></script>
+    <script src="app.js?v=1.1.1"></script>
   </body>
 </html>
