@@ -1458,13 +1458,25 @@ function renderAlternatives() {
 // Views are updated reactively via state-snapshot messages from the worker.
 // This loop only handles lightweight per-frame UI state that must stay in sync
 // with user actions (nav button highlights, view transitions).
+let lastLandingState = null;
 function syncLoop() {
     if (wasmReady) {
         // Sync Active View Mode (reads instantly from _state cache)
         try {
             const activeView = _state.currentView;
-            if (activeView !== lastActiveView) {
+            const appRootEl = document.getElementById('app-root');
+            const isLanding = !!(appRootEl && appRootEl.classList.contains('landing'));
+
+            // Re-run the view switch either when the numeric view mode
+            // changes, OR when we transition into/out of the landing
+            // screen with the same view mode still selected (e.g. typing
+            // an expression while "Simulation" stays the active nav
+            // button) — otherwise the panel never gets revealed once
+            // landing is removed, since handleViewChange() bails out
+            // while landing is active and nothing else re-triggers it.
+            if (activeView !== lastActiveView || isLanding !== lastLandingState) {
                 lastActiveView = activeView;
+                lastLandingState = isLanding;
                 elements.navButtons.forEach(btn => {
                     const btnView = parseInt(btn.getAttribute('data-view'));
                     if (btnView === activeView) {
