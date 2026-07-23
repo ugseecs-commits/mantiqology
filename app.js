@@ -33,6 +33,7 @@ const _state = {
     circuitJSON:      '',
     verilogGate:      '',
     verilogDataflow:  '',
+    addTestbench:     true,
     currentView:      0
 };
 
@@ -79,7 +80,7 @@ const VIEW_FIELDS_JS = {
 const _freshFields = new Set();
 
 /** Spawn the worker that hosts the WASM engine. */
-const _worker = new Worker('wasm/mantiq-worker.js');
+const _worker = new Worker('wasm/mantiq-worker.js?v=1.2.0');
 
 _worker.onmessage = function (event) {
     const msg = event.data;
@@ -177,7 +178,7 @@ function _workerWriteCall(fn, args, view) {
     // needs (defaults to whatever view is currently on screen) — no point paying
     // for KMap/TruthTable/Circuit/Verilog JSON on every keystroke if none of
     // those views are visible.
-    _worker.postMessage({ id, fn, args: args || [], seq, view: view !== undefined ? view : _state.currentView });
+    _worker.postMessage({ id, fn, args: args || [], seq, view: view !== undefined ? view : _state.currentView, addTestbench: _state.addTestbench });
 }
 
 /** Fire a regular (non-snapshot) call to the worker. */
@@ -641,6 +642,96 @@ function updateFrontend() {
         
         updateNavigationState();
         
+function parseTermLitsJS(term) {
+    const lits = [];
+    const clean = term.replace(/[()]/g, '');
+    const re = /([a-zA-Z0-9_]+)(['!]?)/g;
+    let match;
+    while ((match = re.exec(clean)) !== null) {
+        lits.push({ var: match[1], comp: match[2] === "'" || match[2] === "!" });
+    }
+    return lits;
+}
+
+function compareSopTermsJS(a, b) {
+    if (a === b) return 0;
+    const litsA = parseTermLitsJS(a);
+    const litsB = parseTermLitsJS(b);
+
+    if (litsA.length !== litsB.length) {
+        return litsA.length - litsB.length;
+    }
+
+    const minLen = Math.min(litsA.length, litsB.length);
+    for (let i = 0; i < minLen; i++) {
+        if (litsA[i].var !== litsB[i].var) {
+            return litsA[i].var.localeCompare(litsB[i].var);
+        }
+        if (litsA[i].comp !== litsB[i].comp) {
+            return litsA[i].comp ? 1 : -1;
+        }
+    }
+    return a.localeCompare(b);
+}
+
+function sortLiteralsInSingleTermJS(term) {
+    const lits = parseTermLitsJS(term);
+    if (lits.length === 0) return term;
+    lits.sort((a, b) => {
+        if (a.var !== b.var) return a.var.localeCompare(b.var);
+        return a.comp === b.comp ? 0 : (a.comp ? 1 : -1);
+    });
+    const hasParens = term.trim().startsWith('(') && term.trim().endsWith(')');
+    const body = lits.map(l => l.var + (l.comp ? "'" : '')).join('');
+    return hasParens ? '(' + body + ')' : body;
+}
+
+function sortBooleanExpression(expr) {
+    if (!expr || expr === '0' || expr === '1' || expr === 'TRUE' || expr === 'FALSE') return expr;
+    if (expr.includes('(') && expr.includes(')')) {
+        const clauses = [];
+        let i = 0;
+        while (i < expr.length) {
+            if (expr[i] === '(') {
+                let end = expr.indexOf(')', i);
+                if (end === -1) end = expr.length;
+                const rawClause = expr.substring(i + 1, end);
+                const lits = rawClause.split('+').map(s => s.trim()).filter(Boolean);
+                lits.sort((a, b) => {
+                    const varA = a.replace(/['!]/g, '');
+                    const varB = b.replace(/['!]/g, '');
+                    if (varA !== varB) return varA.localeCompare(varB);
+                    const compA = a.includes("'") || a.includes("!");
+                    const compB = b.includes("'") || b.includes("!");
+                    return compA === compB ? 0 : (compA ? 1 : -1);
+                });
+                clauses.push('(' + lits.join('+') + ')');
+                i = end + 1;
+            } else if (/[a-zA-Z0-9_]/.test(expr[i])) {
+                let start = i;
+                while (i < expr.length && /[a-zA-Z0-9_]/.test(expr[i])) i++;
+                while (i < expr.length && (expr[i] === "'" || expr[i] === "!")) i++;
+                clauses.push(expr.substring(start, i));
+            } else {
+                i++;
+            }
+        }
+        if (clauses.length > 0) {
+            clauses.sort(compareSopTermsJS);
+            return clauses.join('');
+        }
+    }
+
+    const terms = expr.split('+').map(s => s.trim()).filter(Boolean);
+    if (terms.length <= 1) {
+        return sortLiteralsInSingleTermJS(expr.trim());
+    }
+
+    const sortedTerms = terms.map(t => sortLiteralsInSingleTermJS(t));
+    sortedTerms.sort(compareSopTermsJS);
+    return sortedTerms.join(' + ');
+}
+
         // Generate Solutions Array
         let solutions = [];
         let primaryExpr = '';
@@ -651,7 +742,7 @@ function updateFrontend() {
             primaryExpr = 'FALSE';
             solutions = [{ expr: 'FALSE', color: 'var(--error)' }];
         } else {
-            primaryExpr = queryWasmString('mantiq_getSimplifiedExpr');
+            primaryExpr = sortBooleanExpression(queryWasmString('mantiq_getSimplifiedExpr'));
             solutions.push({ 
                 expr: primaryExpr, 
                 color: 'var(--success)' 
@@ -660,8 +751,9 @@ function updateFrontend() {
                 const solsJSON = queryWasmString('mantiq_getAllSolutions');
                 const sols = JSON.parse(solsJSON || '[]');
                 sols.forEach(s => {
-                    if (s !== solutions[0].expr) {
-                        solutions.push({ expr: s, color: 'var(--text-primary)' });
+                    const sortedS = sortBooleanExpression(s);
+                    if (sortedS !== solutions[0].expr && !solutions.some(item => item.expr === sortedS)) {
+                        solutions.push({ expr: sortedS, color: 'var(--text-primary)' });
                     }
                 });
             } catch (e) {}
@@ -839,6 +931,50 @@ document.addEventListener('input', (e) => {
 // Holds the last raw QM log so the "Copy Steps" button can grab it verbatim
 let currentQMStepsRaw = '';
 
+// On mobile, the Algebraic Proof / Quine-McCluskey pill only makes sense
+// as a *choice* when there's actually something to switch to. When no
+// algebraic proof is logged for the current expression, hide the pill/tab
+// bar outright and pin the split view to the QM panel, rather than
+// offering a toggle with a dead "Algebraic Proof" option on one side.
+function setAlgProofAvailability(hasAlgProof) {
+    const mobileTabs = document.getElementById('solution-mobile-tabs');
+    const splitView = document.getElementById('solution-split-view');
+    const pill = document.getElementById('solution-type-pill');
+    if (!mobileTabs || !splitView) return;
+
+    const wasUnavailable = mobileTabs.classList.contains('alg-unavailable');
+    mobileTabs.classList.toggle('alg-unavailable', !hasAlgProof);
+
+    if (!hasAlgProof) {
+        // Only auto-switch to QM if the user is currently viewing the alg
+        // panel AND it just became unavailable (not on every render while
+        // the user is mid-typing). This avoids stealing focus during input.
+        const currentTab = splitView.getAttribute('data-active-tab');
+        if (!wasUnavailable && currentTab === 'alg') {
+            splitView.setAttribute('data-active-tab', 'qm');
+            if (pill) {
+                pill.setAttribute('data-state', 'qm');
+                pill.querySelectorAll('.pill-option').forEach(opt => {
+                    opt.classList.toggle('active', opt.getAttribute('data-val') === 'qm');
+                });
+            }
+        }
+    } else if (wasUnavailable) {
+        // Alg proof became available again — restore the alg tab so the
+        // user sees the proof on the next expression that has one.
+        const currentTab = splitView.getAttribute('data-active-tab');
+        if (currentTab === 'qm') {
+            splitView.setAttribute('data-active-tab', 'alg');
+            if (pill) {
+                pill.setAttribute('data-state', 'alg');
+                pill.querySelectorAll('.pill-option').forEach(opt => {
+                    opt.classList.toggle('active', opt.getAttribute('data-val') === 'alg');
+                });
+            }
+        }
+    }
+}
+
 // QM Steps Parser and Renderer
 function renderSolutionView() {
     const algBody = document.getElementById('alg-body');
@@ -849,6 +985,7 @@ function renderSolutionView() {
         Module.ccall('mantiq_isAlwaysFalse', 'number', [], []) !== 0) {
         algBody.innerHTML = '<div class="solution-empty">Constant expression, no proof.</div>';
         qmBody.innerHTML = '<div class="solution-empty">Constant expression, no minimization.</div>';
+        setAlgProofAvailability(false);
         return;
     }
 
@@ -856,6 +993,7 @@ function renderSolutionView() {
     if (!rawSteps) {
         algBody.innerHTML = '<div class="solution-empty">No steps logged.</div>';
         qmBody.innerHTML = '<div class="solution-empty">No steps logged.</div>';
+        setAlgProofAvailability(false);
         return;
     }
 
@@ -911,13 +1049,129 @@ function renderSolutionView() {
         if (/\bpos\b/.test(lower)) return 'pos';
         return '';
     };
+    let isFinalResultSection = false;
+    formCls = format; // seed from the SOP/POS pill; inner section titles (e.g.
+                      // "Quine-McCluskey Minimization") carry no sop/pos wording
+                      // of their own, so without this the very first real
+                      // section would blank the accent color out again.
+
+    // QM's working notation is binary/dash codes (001, 0-10, ...). Readers
+    // still have to mentally translate each code into the literal term it
+    // represents, so wherever we know a token IS such a code (merge pairs,
+    // prime-implicant codes, grouped-minterm listings) we render it as a
+    // two-line badge: the code on top, the actual literal term (ABC, A'BC,
+    // ...) underneath.
+    const proofVariables = () => {
+        try {
+            const vars = JSON.parse(queryWasmString('mantiq_getVariables') || '[]');
+            return Array.isArray(vars) ? vars : [];
+        } catch (_) {
+            return [];
+        }
+    };
+    const isBinaryToken = (tok) => /^[01\-]+$/.test(tok);
+    // One span per bit position, in the same order as the binary code above
+    // it, so the literal lines up character-for-character instead of
+    // drifting once a dash drops a variable (011 -> "A'BC" reads fine, but
+    // -11 -> "BC" no longer sits under the code that produced it). A dash
+    // position renders as its own muted "-" placeholder, and negation is a
+    // bar over the letter (matching textbook notation) rather than a
+    // trailing apostrophe, which was shifting the following characters.
+    const literalSpans = (binaryStr, vars, isPOS) => {
+        let html = '';
+        for (let j = 0; j < Math.min(binaryStr.length, vars.length); j++) {
+            const bit = binaryStr[j];
+            if (bit === '-') {
+                html += `<span class="qm-lit-dash">-</span>`;
+            } else {
+                const negated = isPOS ? (bit === '1') : (bit === '0');
+                html += `<span class="qm-lit-var${negated ? ' neg' : ''}">${escapeHtml(vars[j])}</span>`;
+            }
+        }
+        return html || `<span class="qm-lit-dash">-</span>`;
+    };
+    const termBadge = (rawTok, badgeCls) => {
+        const tok = rawTok.trim();
+        const vars = proofVariables();
+        if (isBinaryToken(tok) && vars.length > 0 && tok.length === vars.length) {
+            const literalHtml = literalSpans(tok, vars, formCls === 'pos');
+            return `<span class="qm-term-badge ${badgeCls}"><span class="qm-term-bin">${escapeHtml(tok)}</span><span class="qm-term-lit">${literalHtml}</span></span>`;
+        }
+        return `<span class="badge ${badgeCls}">${escapeHtml(tok)}</span>`;
+    };
+    // Plain decimal minterm indices (e.g. from "covers [1, 5]" or
+    // "Minterms to cover: [...]") aren't codes to translate - just small
+    // muted number chips, kept visually distinct from term badges.
+    const bracketTokens = (str) => str.trim()
+        .replace(/^\[|\]$/g, '')
+        .split(/\s*,\s*/)
+        .map(t => t.trim())
+        .filter(Boolean);
+    const numChip = (tok) => `<span class="qm-num-chip">${escapeHtml(tok)}</span>`;
+    // Minterm indices covered by a PI, prefixed "m" so a plain "covers
+    // [1, 2, 3]" line reads the same way as the Essential rows below it
+    // ("-> 'bin' is essential (only one covering m3)"), which already carry
+    // the "m" prefix. Without this, PI rows showed bare "1, 2, 3" right next
+    // to Essential rows showing "m3" in the very same table.
+    const mCovers = (str) => bracketTokens(str).map(t => /^\d+$/.test(t) ? `m${t}` : t);
 
     const appendHtml = (str) => {
         if (isAlgebraicSection) algHtml += str;
         else qmHtml += str;
     };
 
-    const closeBlock = () => { if (blockOpen) { appendHtml('</div>'); blockOpen = false; } };
+    // Merge and prime-implicant/essential lines used to render as one
+    // bulky bordered .qm-row per line - for an expression of any real size
+    // that's a wall of near-identical boxes. Consecutive lines of the same
+    // kind are buffered here and flushed as a single compact table instead,
+    // so a run of 8 merges becomes one 8-row table rather than 8 boxes.
+    let pendingGroup = null; // { kind: 'merge' | 'pi', rows: [...] }
+
+    const renderMergeTable = (rows) => `
+        <div class="qm-merge-list">
+            ${rows.map(r => `
+                <div class="qm-merge-row">
+                    ${termBadge(r.a, 'term')}
+                    <span class="qm-merge-op">+</span>
+                    ${termBadge(r.b, 'term')}
+                    <span class="qm-merge-op">=</span>
+                    ${termBadge(r.result, 'result')}
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    const renderPiTable = (rows) => `
+        <div class="qm-pi-list">
+            ${rows.map(r => `
+                <div class="qm-pi-card">
+                    <div class="qm-pi-card-top">
+                        <span class="qm-pi-card-label">${r.icon} ${escapeHtml(r.label)}</span>
+                        ${termBadge(r.term, 'result')}
+                    </div>
+                    <div class="qm-pi-card-covers">
+                        <span class="qm-pi-covers-op">covers</span>
+                        <div class="qm-term-list">${r.covers.map(numChip).join('')}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    const flushGroup = () => {
+        if (!pendingGroup) return;
+        if (!blockOpen) { appendHtml('<div class="qm-block">'); blockOpen = true; }
+        appendHtml(pendingGroup.kind === 'merge' ? renderMergeTable(pendingGroup.rows) : renderPiTable(pendingGroup.rows));
+        pendingGroup = null;
+    };
+
+    const pushGroupRow = (kind, row) => {
+        if (pendingGroup && pendingGroup.kind !== kind) flushGroup();
+        if (!pendingGroup) pendingGroup = { kind, rows: [] };
+        pendingGroup.rows.push(row);
+    };
+
+    const closeBlock = () => { flushGroup(); if (blockOpen) { appendHtml('</div>'); blockOpen = false; } };
     const closeStep = () => { closeBlock(); if (stepOpen) { appendHtml('</div></details>'); stepOpen = false; } };
     const closeSection = () => { closeStep(); if (sectionOpen) { appendHtml('</div>'); sectionOpen = false; } };
 
@@ -925,22 +1179,49 @@ function renderSolutionView() {
         const trimmed = line.trim();
         if (!trimmed) return;
 
+        // --- Section headers: "=== Title ===" -----------------------------
         if (trimmed.startsWith('===')) {
+            const cleanTitle = trimmed.replace(/=/g, '').trim();
+
+            // The wasm log itself opens with a bare "=== SOP Minimization ==="
+            // marker directly in front of "=== Quine-McCluskey Minimization
+            // ===", and the SOP/POS split in the caller re-prepends the same
+            // pattern ("=== POS Minimization ===") in front of the second,
+            // otherwise-identical run. Neither carries any content of its
+            // own - it's just the only sop/pos wording in that half - so
+            // both are treated as a silent color-switch marker rather than
+            // opening a visible section (which is what produced the
+            // duplicate "SOP Minimization" / "Quine-McCluskey Minimization"
+            // stacked headers).
+            const formMarkerMatch = cleanTitle.match(/^(sop|pos) minimization$/i);
+            if (formMarkerMatch) {
+                formCls = formMarkerMatch[1].toLowerCase();
+                return;
+            }
+
             closeSection();
-            const text = trimmed.replace(/=/g, '').trim();
-            isAlgebraicSection = text.toLowerCase().includes('algebraic');
-            formCls = detectForm(text);
+            isAlgebraicSection = cleanTitle.toLowerCase().includes('algebraic');
+            const df = detectForm(cleanTitle);
+            if (df) formCls = df; // keep prior color through generic-titled sections
+            isFinalResultSection = /final minimization result/i.test(cleanTitle);
             appendHtml(`
                 <div class="qm-section">
+                    <div class="qm-section-title">
+                        ${escapeHtml(cleanTitle)}
+                    </div>
             `);
             sectionOpen = true;
             stepCounter = 0;
-        } else if (/^\d+\./.test(trimmed)) {
+            return;
+        }
+
+        // --- Numbered step headers: "1. Initial Setup" ---------------------
+        if (/^\d+\./.test(trimmed)) {
             closeStep();
             stepCounter++;
             const stepText = trimmed.replace(/^\d+\.\s*/, '');
             appendHtml(`
-                <details class="qm-step ${formCls}">
+                <details class="qm-step" open>
                     <summary class="qm-step-summary">
                         <span class="qm-step-num">${stepCounter}</span>
                         <span class="qm-step-title">${escapeHtml(stepText)}</span>
@@ -949,78 +1230,183 @@ function renderSolutionView() {
                     <div class="qm-step-body">
             `);
             stepOpen = true;
-        } else if (trimmed.toLowerCase().startsWith('final')) {
-            closeBlock();
-            const colonIdx = trimmed.indexOf(':');
-            if (colonIdx !== -1) {
-                const label = trimmed.substring(0, colonIdx).trim();
-                const value = trimmed.substring(colonIdx + 1).trim();
-                appendHtml(`
-                    <div class="qm-final">
-                        <span class="qm-final-label">${escapeHtml(label)}</span>
-                        <span class="qm-final-value">${escapeHtml(value)}</span>
-                    </div>
-                `);
-            } else {
-                appendHtml(`<h4 class="qm-h3"><span class="qm-status-dot"></span>${escapeHtml(trimmed)}</h4>`);
-            }
-        } else if (trimmed.startsWith('---') || trimmed.startsWith('Finding') || trimmed.startsWith('Performing') || trimmed.startsWith('Selected')) {
-            closeBlock();
-            const text = trimmed.replace(/^-+\s*/, '');
-            appendHtml(`<h4 class="qm-h3"><span class="qm-status-dot"></span>${escapeHtml(text)}</h4>`);
-        } else {
-            if (!blockOpen) { appendHtml('<div class="qm-block">'); blockOpen = true; }
+            return;
+        }
 
-            if (trimmed.startsWith('-- (') && trimmed.endsWith(') -->')) {
-                pendingAlgebraicReason = trimmed.substring(4, trimmed.length - 5);
-            } else if (pendingAlgebraicReason !== null) {
-                appendHtml(`
-                    <div class="qm-row algebraic-step">
-                        <div class="alg-expr">${escapeHtml(trimmed)}</div>
-                        <div class="alg-reason">
-                            <span class="alg-by">${pendingAlgebraicReason === 'Given' ? '' : 'by'}</span>
-                            <span class="badge result alg-rule ${formCls}">${escapeHtml(pendingAlgebraicReason)}</span>
-                        </div>
+        if (!blockOpen) { appendHtml('<div class="qm-block">'); blockOpen = true; }
+
+        // --- Algebraic-proof lines (unrelated logger, kept as-is) ----------
+        if (trimmed.startsWith('-- (') && trimmed.endsWith(') -->')) {
+            pendingAlgebraicReason = trimmed.substring(4, trimmed.length - 5);
+            return;
+        }
+        if (pendingAlgebraicReason !== null) {
+            appendHtml(`
+                <div class="qm-row algebraic-step">
+                    <div class="alg-expr">${escapeHtml(trimmed)}</div>
+                    <div class="alg-reason">
+                        <span class="alg-by">${pendingAlgebraicReason === 'Given' ? '' : 'by'}</span>
+                        <span class="alg-rule">${escapeHtml(pendingAlgebraicReason)}</span>
                     </div>
-                `);
-                pendingAlgebraicReason = null;
-            } else if (trimmed.startsWith('Merged:')) {
-                const rest = trimmed.substring(7).trim();
-                const parts = rest.split(/->|=|\+/);
-                if (parts.length >= 3) {
-                    appendHtml(`
-                        <div class="qm-row">
-                            <span class="qm-row-label">Merge</span>
-                            <span class="badge term">${escapeHtml(parts[0].trim())}</span>
-                            <span class="qm-row-op">+</span>
-                            <span class="badge term">${escapeHtml(parts[1].trim())}</span>
-                            <span class="qm-row-op">=</span>
-                            <span class="badge result ${formCls}">${escapeHtml(parts[2].trim())}</span>
-                        </div>
-                    `);
-                } else {
-                    appendHtml(`<div class="qm-row">${escapeHtml(trimmed)}</div>`);
-                }
-            } else if (trimmed.startsWith('* PI:')) {
-                const rest = trimmed.substring(5).trim();
-                const coversIdx = rest.indexOf('covers');
-                if (coversIdx !== -1) {
-                    const pi = rest.substring(0, coversIdx).trim();
-                    const covers = rest.substring(coversIdx + 6).trim();
-                    appendHtml(`
-                        <div class="qm-row qm-row-pi ${formCls}">
-                            <span class="qm-row-label pi ${formCls}">&#9733; Prime Implicant</span>
-                            <span class="badge result ${formCls}">${escapeHtml(pi)}</span>
-                            <span class="qm-row-op">covers</span>
-                            <span class="badge term">${escapeHtml(covers)}</span>
-                        </div>
-                    `);
-                } else {
-                    appendHtml(`<div class="qm-row qm-row-pi ${formCls}"><span class="qm-row-label pi ${formCls}">&#9733; PI</span> ${escapeHtml(rest)}</div>`);
-                }
+                </div>
+            `);
+            pendingAlgebraicReason = null;
+            return;
+        }
+
+        // --- "--- Pass 1 (Grouping size 2) ---" subheaders -----------------
+        let m;
+        if ((m = trimmed.match(/^-{2,}\s*(.+?)\s*-{2,}$/))) {
+            closeBlock();
+            appendHtml(`<h4 class="qm-h3"><span class="qm-status-dot"></span>${escapeHtml(m[1])}</h4>`);
+            return;
+        }
+
+        // --- Bare "Label:" subheaders with no value on the line ------------
+        // ("Initial Term Binary Representations:", "Final Valid Prime
+        // Implicants:", "Finding Essential Prime Implicants:") - matched
+        // generically instead of hardcoding each phrase, and crucially
+        // NOT routed through the boxed-answer treatment below.
+        if (/:$/.test(trimmed) && trimmed.length < 60) {
+            closeBlock();
+            appendHtml(`<h4 class="qm-h3"><span class="qm-status-dot"></span>${escapeHtml(trimmed.slice(0, -1))}</h4>`);
+            return;
+        }
+
+        // --- "m0 = 000" / "m0 = 000 (d)" initial term rows -----------------
+        if ((m = trimmed.match(/^(m\d+)\s*=\s*([01\-]+)(\s*\(d\))?$/))) {
+            appendHtml(`
+                <div class="qm-row">
+                    <span class="qm-row-label">${escapeHtml(m[1])}</span>
+                    <span class="qm-row-op">=</span>
+                    ${termBadge(m[2], 'term')}
+                    ${m[3] ? '<span class="badge dc">don\'t care</span>' : ''}
+                </div>
+            `);
+            return;
+        }
+
+        // --- "Merged: A + B -> C" -- buffered into a compact merge table --
+        if (trimmed.startsWith('Merged:')) {
+            const rest = trimmed.substring(7).trim();
+            const parts = rest.split(/\s*->\s*|\s*\+\s*/);
+            if (parts.length >= 3) {
+                pushGroupRow('merge', { a: parts[0], b: parts[1], result: parts[2] });
             } else {
+                flushGroup();
                 appendHtml(`<div class="qm-row">${escapeHtml(trimmed)}</div>`);
             }
+            return;
+        }
+
+        // --- "* PI: bin covers [minterms]" (newly-found prime implicant) --
+        // buffered into a compact PI table alongside the other PI-family
+        // rows below (final-list PIs, essentials).
+        if (trimmed.startsWith('* PI:')) {
+            const rest = trimmed.substring(5).trim();
+            const covMatch = rest.match(/^(\S+)\s+covers\s+(\[.*\])$/);
+            if (covMatch) {
+                pushGroupRow('pi', { icon: '&#9733;', label: 'Prime Implicant', term: covMatch[1], covers: mCovers(covMatch[2]) });
+            } else {
+                pushGroupRow('pi', { icon: '&#9733;', label: 'PI', term: rest, covers: [] });
+            }
+            return;
+        }
+
+        // --- "bin covers [minterms]" (Final Valid Prime Implicants list) --
+        if ((m = trimmed.match(/^([01\-]+)\s+covers\s+(\[.*\])$/))) {
+            pushGroupRow('pi', { icon: '&#10003;', label: 'Prime Implicant', term: m[1], covers: mCovers(m[2]) });
+            return;
+        }
+
+        // --- "-> 'bin' is essential (only one covering m3)" ----------------
+        if ((m = trimmed.match(/^->\s*'([^']+)'\s+is essential\s*\(only one covering m(\d+)\)$/))) {
+            pushGroupRow('pi', { icon: '&#9733;', label: 'Essential', term: m[1], covers: ['m' + m[2]] });
+            return;
+        }
+
+        // Every other line type below is unrelated to the merge/PI tables -
+        // flush whatever's buffered before rendering it.
+        flushGroup();
+
+        // --- "-> bin1 is dominated by bin2 (Discarded)" --------------------
+        if ((m = trimmed.match(/^->\s*(\S+)\s+is dominated by\s+(\S+)\s*\(Discarded\)$/))) {
+            appendHtml(`
+                <div class="qm-row qm-row-discarded">
+                    ${termBadge(m[1], 'term discarded')}
+                    <span class="qm-row-op">dominated by</span>
+                    ${termBadge(m[2], 'term')}
+                    <span class="badge discarded">discarded</span>
+                </div>
+            `);
+            return;
+        }
+
+        // --- "No more merges possible." / "No essential PIs found." -------
+        if (/^No (more merges possible|essential prime implicants found)\.$/.test(trimmed)) {
+            appendHtml(`<div class="qm-row qm-row-note">${escapeHtml(trimmed)}</div>`);
+            return;
+        }
+
+        // --- "Solution 2: [1-0, 0-1]" ---------------------------------------
+        if ((m = trimmed.match(/^(Solution\s+\d+):\s*(\[.*\])$/))) {
+            appendHtml(`
+                <div class="qm-row qm-term-list-row">
+                    <span class="qm-row-label">${escapeHtml(m[1])}</span>
+                    <div class="qm-term-list">${bracketTokens(m[2]).map(t => termBadge(t, 'term')).join('')}</div>
+                </div>
+            `);
+            return;
+        }
+
+        // --- "Minimized Terms: [...]" - the actual final boxed answer -----
+        if ((m = trimmed.match(/^Minimized Terms:\s*(\[.*\])$/))) {
+            closeBlock();
+            const terms = bracketTokens(m[1]);
+            // SOP terms are summed ("+"); POS terms are a product of sums,
+            // so joining them with "+" is wrong - use a middle-dot instead.
+            const joinerHtml = formCls === 'pos'
+                ? '<span class="qm-final-plus qm-final-dot">&middot;</span>'
+                : '<span class="qm-final-plus">+</span>';
+            appendHtml(`
+                <div class="qm-final">
+                    <span class="qm-final-label">Minimized Result</span>
+                    <div class="qm-final-terms">${terms.map(t => termBadge(t, 'result')).join(joinerHtml)}</div>
+                </div>
+            `);
+            return;
+        }
+
+        // --- Generic "Label: value" lines (Variables, Minterms to cover,
+        // Don't Cares, Solutions found, ...) - decimal listings get plain
+        // number chips; anything else prints as-is. --------------------------
+        let label = '';
+        let rest = trimmed;
+        const colonIdx = trimmed.indexOf(':');
+        if (colonIdx !== -1 && colonIdx < 48) {
+            label = trimmed.substring(0, colonIdx).trim();
+            rest = trimmed.substring(colonIdx + 1).trim();
+        }
+        if (/^\[.*\]$/.test(rest)) {
+            const tokens = bracketTokens(rest);
+            const vars = proofVariables();
+            const isCodeListing = vars.length > 0 && tokens.length > 0 &&
+                tokens.every(t => isBinaryToken(t) && t.length === vars.length);
+            appendHtml(`
+                <div class="qm-row qm-term-list-row">
+                    ${label ? `<span class="qm-row-label">${escapeHtml(label)}</span>` : ''}
+                    <div class="qm-term-list">${tokens.map(t => isCodeListing ? termBadge(t, 'term') : numChip(t)).join('')}</div>
+                </div>
+            `);
+        } else if (label) {
+            appendHtml(`
+                <div class="qm-row">
+                    <span class="qm-row-label">${escapeHtml(label)}</span>
+                    <span class="qm-row-value" style="font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-left: 2px;">${escapeHtml(rest)}</span>
+                </div>
+            `);
+        } else {
+            appendHtml(`<div class="qm-row">${escapeHtml(trimmed)}</div>`);
         }
     });
 
@@ -1028,6 +1414,7 @@ function renderSolutionView() {
     
     qmBody.innerHTML = qmHtml || '<div class="solution-empty">No Quine-McCluskey steps logged.</div>';
     algBody.innerHTML = algHtml || '<div class="solution-empty">No algebraic proof logged.</div>';
+    setAlgProofAvailability(!!algHtml);
 }
 
 // Render Alternative Solutions list
@@ -1165,14 +1552,6 @@ elements.input.addEventListener('input', (e) => {
     if (clearBtn) {
         clearBtn.style.display = expr.trim() !== '' ? 'flex' : 'none';
     }
-
-    // Force select K-Map view if input matches KMAP(...) command
-    if (/^\s*KMAP\s*\(([^)]+)\)\s*$/i.test(expr)) {
-        const kmapNavBtn = document.getElementById('btn-view-kmap');
-        if (kmapNavBtn && wasmReady) {
-            kmapNavBtn.click();
-        }
-    }
     
     const appRoot = document.getElementById('app-root');
     if (appRoot) {
@@ -1259,50 +1638,13 @@ window.addEventListener('keydown', (e) => {
         document.getElementById('share-popup').style.display = 'none';
         const formatGuidePopup = document.getElementById('format-guide-popup');
         if (formatGuidePopup) formatGuidePopup.style.display = 'none';
+        const examplesPopup = document.getElementById('examples-popup');
+        if (examplesPopup) examplesPopup.style.display = 'none';
     }
 });
 
  
-// See Examples Button Morph
-const seeExamplesBtn = document.getElementById('see-examples-btn');
-if (seeExamplesBtn) {
-    seeExamplesBtn.addEventListener('click', () => {
-        changeState(() => {
-            const appRoot = document.getElementById('app-root');
-            if (appRoot) {
-                appRoot.classList.remove('landing');
-                appRoot.classList.add('showing-examples');
-            }
-        });
-        elements.input.focus();
-    });
-}
 
-// Learn Formats Modal Logic
-const learnFormatsBtn = document.getElementById('learn-formats-btn');
-const formatGuidePopup = document.getElementById('format-guide-popup');
-const formatGuideClose = document.getElementById('format-guide-close');
-
-if (learnFormatsBtn && formatGuidePopup) {
-    learnFormatsBtn.addEventListener('click', () => {
-        formatGuidePopup.style.display = 'flex';
-    });
-}
-
-if (formatGuideClose && formatGuidePopup) {
-    formatGuideClose.addEventListener('click', () => {
-        formatGuidePopup.style.display = 'none';
-    });
-}
-
-if (formatGuidePopup) {
-    formatGuidePopup.addEventListener('click', (e) => {
-        if (e.target === formatGuidePopup) {
-            formatGuidePopup.style.display = 'none';
-        }
-    });
-}
-// SOP / POS Pill Toggle
 if (elements.sopPosPill) {
     elements.sopPosPill.addEventListener('click', () => {
         const isSop = elements.sopPosPill.getAttribute('data-state') === 'sop';
@@ -1505,21 +1847,7 @@ if (waveScrollWrapperEl && window.ResizeObserver) {
     });
 })();
 
-// Sidebar Expanded/Collapsed Toggle
-const sidebarToggle = document.getElementById('sidebar-toggle');
-if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-        const appRoot = document.getElementById('app-root');
-        if (appRoot) {
-            appRoot.classList.toggle('sidebar-expanded');
-            
-            // Dispatch window resize after standard transition (300ms) to refit canvas diagrams
-            setTimeout(() => {
-                window.dispatchEvent(new Event('resize'));
-            }, 320);
-        }
-    });
-}
+// Sidebar is now fixed-width (no expand/collapse toggle)
 
 // Fix Backspace / Key events being stolen by Emscripten/Raylib
 // We must use capturing phase on window/document to intercept before Emscripten
@@ -1598,34 +1926,90 @@ function handleViewChange(viewMode) {
     }
 }
 
-// Example item click handler
-document.querySelectorAll('.example-link-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-        const expr = e.currentTarget.getAttribute('data-expr');
+// Modals Logic: Examples & Learn Formats
+const seeExamplesBtn = document.getElementById('see-examples-btn');
+const examplesPopup = document.getElementById('examples-popup');
+const examplesClose = document.getElementById('examples-close');
+
+if (seeExamplesBtn && examplesPopup) {
+    seeExamplesBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        examplesPopup.style.display = 'flex';
+    });
+}
+
+if (examplesClose && examplesPopup) {
+    examplesClose.addEventListener('click', () => {
+        examplesPopup.style.display = 'none';
+    });
+}
+
+if (examplesPopup) {
+    examplesPopup.addEventListener('click', (e) => {
+        const exampleBtn = e.target.closest('.example-link-item');
+        if (exampleBtn) {
+            const expr = exampleBtn.getAttribute('data-expr');
+            if (expr && elements.input) {
+                elements.input.value = expr;
+                // Dispatch input event to trigger expression processing natively
+                elements.input.dispatchEvent(new Event('input', { bubbles: true }));
+                examplesPopup.style.display = 'none';
+            }
+        } else if (e.target === examplesPopup) {
+            examplesPopup.style.display = 'none';
+        }
+    });
+}
+
+const learnFormatsBtn = document.getElementById('learn-formats-btn');
+const formatGuidePopup = document.getElementById('format-guide-popup');
+const formatGuideClose = document.getElementById('format-guide-close');
+
+if (learnFormatsBtn && formatGuidePopup) {
+    learnFormatsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        formatGuidePopup.style.display = 'flex';
+    });
+}
+
+if (formatGuideClose && formatGuidePopup) {
+    formatGuideClose.addEventListener('click', () => {
+        formatGuidePopup.style.display = 'none';
+    });
+}
+
+// Verilog Testbench Pill Toggles
+const verilogTbpills = document.querySelectorAll('.verilog-tb-toggle');
+verilogTbpills.forEach(pill => {
+    pill.addEventListener('click', (e) => {
+        const clickedOption = e.target.closest('.pill-option');
+        const currentState = pill.getAttribute('data-state');
+        let newState = currentState === 'tb' ? 'no-tb' : 'tb';
+        if (clickedOption) {
+            newState = clickedOption.getAttribute('data-val');
+        }
         
-        changeState(() => {
-            elements.input.value = expr;
-            
-            const clearBtn = document.getElementById('clear-input-btn');
-            if (clearBtn) {
-                clearBtn.style.display = 'flex';
-            }
-            
-            const appRoot = document.getElementById('app-root');
-            if (appRoot) {
-                appRoot.classList.remove('landing');
-                appRoot.classList.remove('showing-examples');
-            }
-            
-            if (wasmReady) {
-                Module.ccall('mantiq_setExpression', null, ['string'], [expr]);
-                updateFrontend();
-            }
+        if (newState === currentState) return; // No change
+        
+        // Sync all Verilog TB pills
+        verilogTbpills.forEach(p => {
+            p.setAttribute('data-state', newState);
+            p.querySelectorAll('.pill-option').forEach(opt => {
+                opt.classList.toggle('active', opt.getAttribute('data-val') === newState);
+            });
         });
+        
+        _state.addTestbench = (newState === 'tb');
+        
+        if (wasmReady && _state.expression.trim() !== '') {
+            _workerWriteCall('_refreshViewFields');
+            updateFrontend();
+        }
     });
 });
 
-// Click simplified expression to open QM Steps
+// SOP / POS Pill Toggle
+
 
 
 // Popups closing
@@ -2170,6 +2554,7 @@ function renderVerilogHTML() {
 function renderHTMLCircuit() {
     if (!wasmReady) return;
     const jsonStr = queryWasmString('mantiq_getCircuitJSON');
+    console.log("Mantiq Debug - Circuit JSON:", jsonStr);
     const origScroll = document.getElementById('original-circuit-scroll');
     const simpScroll = document.getElementById('simplified-circuit-scroll');
     const origPanel = document.getElementById('original-circuit-panel');
@@ -2746,8 +3131,7 @@ function closePanelFullscreen() {
 
 function generateSVGForCircuit(root) {
     let leafY = 40;
-    const xSpacing = 85;
-    const ySpacing = 50;
+    const ySpacing = 60;
     
     function layoutNode(node, depth) {
         if (!node.children || node.children.length === 0) {
@@ -2760,10 +3144,22 @@ function generateSVGForCircuit(root) {
             node.children.forEach(child => {
                 layoutNode(child, depth + 1);
                 sumY += child.y;
-                if (child.x > maxX) maxX = child.x;
+                const childR = !child.isGate ? 20 : (child.children.length === 3 ? 25 : (child.children.length === 4 ? 30 : (child.children.length > 4 ? 35 : 20)));
+                const childOutputX = child.x + childR;
+                if (childOutputX > maxX) maxX = childOutputX;
             });
-            node.x = maxX + xSpacing;
-            node.y = sumY / node.children.length;
+            node.x = maxX + 65;
+            
+            const numC = node.children.length;
+            if (numC === 2) {
+                node.y = (node.children[0].y + node.children[1].y) / 2;
+            } else if (numC === 3) {
+                node.y = node.children[1].y;
+            } else if (numC === 4) {
+                node.y = (node.children[1].y + node.children[2].y) / 2;
+            } else {
+                node.y = sumY / numC;
+            }
         }
     }
     
@@ -2817,7 +3213,8 @@ function generateSVGForCircuit(root) {
         if (node.children) {
             // Sort children so wires don't criss-cross weirdly, though tree layout naturally handles it somewhat
             node.children.forEach((child, idx) => {
-                const cx = child.x + 20; // output of child
+                const childR = !child.isGate ? 20 : (child.children.length === 3 ? 25 : (child.children.length === 4 ? 30 : (child.children.length > 4 ? 35 : 20)));
+                const cx = child.x + childR; // output of child
                 
                 // input of current node
                 let nx = node.x - 20; 
@@ -2827,14 +3224,18 @@ function generateSVGForCircuit(root) {
                 let ny = node.y;
                 if (node.children.length > 1) {
                     // Spread inputs vertically
-                    const span = 20;
-                    const step = span / (node.children.length - 1);
+                    const numInputs = node.children.length;
+                    const span = numInputs === 3 ? 30 : (numInputs === 4 ? 40 : (numInputs > 4 ? 50 : 20));
+                    const step = span / (numInputs - 1);
                     ny = node.y - span/2 + idx * step;
                 }
                 
                 const cy = child.y;
                 
-                const midX = Math.max(cx + 10, nx - 20);
+                let midX = Math.max(cx + 10, nx - 22);
+                if (node.children.length === 4 && (idx === 1 || idx === 2)) {
+                    midX = Math.max(cx + 5, nx - 38);
+                }
                 wires += `<path class="circuit-wire" d="M ${cx} ${cy} L ${midX} ${cy} L ${midX} ${ny} L ${nx} ${ny}" />`;
                 
                 drawNode(child);
@@ -2851,27 +3252,33 @@ function generateSVGForCircuit(root) {
             // still measurably too small a shift and left the glyph sitting high.
             gates += `<text class="var-text" x="${node.x}" y="${node.y}" text-anchor="middle" dy="0.244em">${node.value}</text>`;
         } else {
-            gates += getGateSVG(node.type, node.x, node.y);
+            gates += getGateSVG(node.type, node.x, node.y, node.children ? node.children.length : 2);
         }
     }
     
     drawNode(root);
     
     // Output wire
-    wires += `<path class="circuit-wire" d="M ${root.x + 20} ${root.y} L ${root.x + 50} ${root.y}" />`;
-    gates += `<text class="var-text" x="${root.x + 60}" y="${root.y}" text-anchor="start" dominant-baseline="central">OUTPUT</text>`;
+    const rootR = !root.isGate ? 20 : (root.children.length === 3 ? 25 : (root.children.length === 4 ? 30 : (root.children.length > 4 ? 35 : 20)));
+    wires += `<path class="circuit-wire" d="M ${root.x + rootR} ${root.y} L ${root.x + rootR + 35} ${root.y}" />`;
+    gates += `<text class="var-text" x="${root.x + rootR + 45}" y="${root.y}" text-anchor="start" dominant-baseline="central">OUTPUT</text>`;
     svg += wires;
     svg += gates;
     svg += `</svg></div>`;
     return svg;
 }
 
-function getGateSVG(type, x, y) {
+function getGateSVG(type, x, y, numInputs = 2) {
     let svg = '';
+    let r = 20;
+    if (numInputs === 3) r = 25;
+    else if (numInputs === 4) r = 30;
+    else if (numInputs > 4) r = 35;
+
     if (type === 'AND') {
-        svg += `<path class="gate-shape" d="M ${x-20} ${y-20} L ${x} ${y-20} A 20 20 0 0 1 ${x} ${y+20} L ${x-20} ${y+20} Z" />`;
+        svg += `<path class="gate-shape" d="M ${x-20} ${y-r} L ${x} ${y-r} A ${r} ${r} 0 0 1 ${x} ${y+r} L ${x-20} ${y+r} Z" />`;
     } else if (type === 'OR') {
-        svg += `<path class="gate-shape" d="M ${x-20} ${y-20} Q ${x-5} ${y} ${x-20} ${y+20} Q ${x+10} ${y+20} ${x+20} ${y} Q ${x+10} ${y-20} ${x-20} ${y-20} Z" />`;
+        svg += `<path class="gate-shape" d="M ${x-20} ${y-r} Q ${x-5} ${y} ${x-20} ${y+r} Q ${x+10} ${y+r} ${x+r} ${y} Q ${x+10} ${y-r} ${x-20} ${y-r} Z" />`;
     } else if (type === 'NOT') {
         svg += `<path class="gate-shape" d="M ${x-15} ${y-15} L ${x+10} ${y} L ${x-15} ${y+15} Z" />`;
         svg += `<circle class="gate-shape" cx="${x+15}" cy="${y}" r="5" />`;
@@ -3255,6 +3662,7 @@ function renderHTMLSimulation(resetZoom = true) {
     if (!origSimScroll || !simpSimScroll || !container) return;
     
     const jsonStr = queryWasmString('mantiq_getCircuitJSON');
+    console.log("Mantiq Debug - Simulation JSON:", jsonStr);
     if (!jsonStr) {
         origSimScroll.innerHTML = '<div style="color:var(--text-muted); text-align:center; margin-top:20px;">No expression processed yet</div>';
         simpSimScroll.innerHTML = '<div style="color:var(--text-muted); text-align:center; margin-top:20px;">No expression processed yet</div>';
@@ -3407,55 +3815,72 @@ if (!isDummy && origDepth <= 99) attachToggles(origSimScroll);
     }
 }
 
-function getGateOutputPinRange(type, x) {
+function getGateOutputPinRange(type, x, numInputs = 2) {
     if (type === 'NOT') {
         return { startX: x + 22, endX: x + 34 };
     }
+    let r = 25;
+    if (numInputs === 3) r = 30;
+    else if (numInputs === 4) r = 35;
+    else if (numInputs > 4) r = 40;
+
     if (type === 'NAND' || type === 'NOR') {
-        return { startX: x + 35, endX: x + 47 };
+        return { startX: x + r + 10, endX: x + r + 22 };
     }
-    return { startX: x + 25, endX: x + 37 }; // AND, OR, default
+    return { startX: x + r, endX: x + r + 12 }; // AND, OR, default
 }
 
-function getSimGateSilkscreen(type, x, y, panelId = 'p') {
+function getSimGateSilkscreen(type, x, y, panelId = 'p', numInputs = 2) {
     let inner = '';
     const offset = 2.5; // Offset to draw silkscreen slightly outside the gate body
+    let r = 25;
+    if (numInputs === 3) r = 30;
+    else if (numInputs === 4) r = 35;
+    else if (numInputs > 4) r = 40;
+
+    const ro = r + offset;
+
     if (type === 'AND') {
-        inner = `<path d="M ${x-25-offset} ${y-25-offset} L ${x} ${y-25-offset} A ${25+offset} ${25+offset} 0 0 1 ${x} ${y+25+offset} L ${x-25-offset} ${y+25+offset} Z" />`;
+        inner = `<path d="M ${x-25-offset} ${y-ro} L ${x} ${y-ro} A ${ro} ${ro} 0 0 1 ${x} ${y+ro} L ${x-25-offset} ${y+ro} Z" />`;
     } else if (type === 'OR') {
-        inner = `<path d="M ${x-25-offset} ${y-25-offset} Q ${x-8} ${y} ${x-25-offset} ${y+25+offset} Q ${x+10+offset} ${y+25+offset} ${x+25+offset} ${y} Q ${x+10+offset} ${y-25-offset} ${x-25-offset} ${y-25-offset} Z" />`;
+        inner = `<path d="M ${x-25-offset} ${y-ro} Q ${x-8} ${y} ${x-25-offset} ${y+ro} Q ${x+10+offset} ${y+ro} ${x+ro} ${y} Q ${x+10+offset} ${y-ro} ${x-25-offset} ${y-ro} Z" />`;
     } else if (type === 'NOT') {
         inner = `<path d="M ${x-20-offset} ${y-20-offset} L ${x+10+offset} ${y} L ${x-20-offset} ${y+20+offset} Z" />
                  <circle cx="${x+16}" cy="${y}" r="${6+offset}" />`;
     } else if (type === 'NAND') {
-        inner = `<path d="M ${x-25-offset} ${y-25-offset} L ${x} ${y-25-offset} A ${25+offset} ${25+offset} 0 0 1 ${x} ${y+25+offset} L ${x-25-offset} ${y+25+offset} Z" />
-                 <circle cx="${x+30}" cy="${y}" r="${5+offset}" />`;
+        inner = `<path d="M ${x-25-offset} ${y-ro} L ${x} ${y-ro} A ${ro} ${ro} 0 0 1 ${x} ${y+ro} L ${x-25-offset} ${y+ro} Z" />
+                 <circle cx="${x+r+5}" cy="${y}" r="${5+offset}" />`;
     } else if (type === 'NOR') {
-        inner = `<path d="M ${x-25-offset} ${y-25-offset} Q ${x-8} ${y} ${x-25-offset} ${y+25+offset} Q ${x+10+offset} ${y+25+offset} ${x+25+offset} ${y} Q ${x+10+offset} ${y-25-offset} ${x-25-offset} ${y-25-offset} Z" />
-                 <circle cx="${x+30}" cy="${y}" r="${5+offset}" />`;
+        inner = `<path d="M ${x-25-offset} ${y-ro} Q ${x-8} ${y} ${x-25-offset} ${y+ro} Q ${x+10+offset} ${y+ro} ${x+ro} ${y} Q ${x+10+offset} ${y-ro} ${x-25-offset} ${y-ro} Z" />
+                 <circle cx="${x+r+5}" cy="${y}" r="${5+offset}" />`;
     } else {
-        inner = `<rect x="${x-25-offset}" y="${y-25-offset}" width="${50+offset*2}" height="${50+offset*2}" rx="4" />`;
+        inner = `<rect x="${x-25-offset}" y="${y-ro}" width="${50+offset*2}" height="${r*2+offset*2}" rx="4" />`;
     }
     return `<g fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.6" filter="url(#silkscreen-${panelId})">${inner}</g>`;
 }
 
-function getSimGateShape(type, x, y, panelId = 'p') {
+function getSimGateShape(type, x, y, panelId = 'p', numInputs = 2) {
     let inner = '';
+    let r = 25;
+    if (numInputs === 3) r = 30;
+    else if (numInputs === 4) r = 35;
+    else if (numInputs > 4) r = 40;
+
     if (type === 'AND') {
-        inner = `<path d="M ${x-25} ${y-25} L ${x} ${y-25} A 25 25 0 0 1 ${x} ${y+25} L ${x-25} ${y+25} Z" />`;
+        inner = `<path d="M ${x-25} ${y-r} L ${x} ${y-r} A ${r} ${r} 0 0 1 ${x} ${y+r} L ${x-25} ${y+r} Z" />`;
     } else if (type === 'OR') {
-        inner = `<path d="M ${x-25} ${y-25} Q ${x-8} ${y} ${x-25} ${y+25} Q ${x+10} ${y+25} ${x+25} ${y} Q ${x+10} ${y-25} ${x-25} ${y-25} Z" />`;
+        inner = `<path d="M ${x-25} ${y-r} Q ${x-8} ${y} ${x-25} ${y+r} Q ${x+10} ${y+r} ${x+r} ${y} Q ${x+10} ${y-r} ${x-25} ${y-r} Z" />`;
     } else if (type === 'NOT') {
         inner = `<path d="M ${x-20} ${y-20} L ${x+10} ${y} L ${x-20} ${y+20} Z" />
                  <circle cx="${x+16}" cy="${y}" r="6" />`;
     } else if (type === 'NAND') {
-        inner = `<path d="M ${x-25} ${y-25} L ${x} ${y-25} A 25 25 0 0 1 ${x} ${y+25} L ${x-25} ${y+25} Z" />
-                 <circle cx="${x+30}" cy="${y}" r="5" />`;
+        inner = `<path d="M ${x-25} ${y-r} L ${x} ${y-r} A ${r} ${r} 0 0 1 ${x} ${y+r} L ${x-25} ${y+r} Z" />
+                 <circle cx="${x+r+5}" cy="${y}" r="5" />`;
     } else if (type === 'NOR') {
-        inner = `<path d="M ${x-25} ${y-25} Q ${x-8} ${y} ${x-25} ${y+25} Q ${x+10} ${y+25} ${x+25} ${y} Q ${x+10} ${y-25} ${x-25} ${y-25} Z" />
-                 <circle cx="${x+30}" cy="${y}" r="5" />`;
+        inner = `<path d="M ${x-25} ${y-r} Q ${x-8} ${y} ${x-25} ${y+r} Q ${x+10} ${y+r} ${x+r} ${y} Q ${x+10} ${y-r} ${x-25} ${y-r} Z" />
+                 <circle cx="${x+r+5}" cy="${y}" r="5" />`;
     } else {
-        inner = `<rect x="${x-25}" y="${y-25}" width="50" height="50" rx="4" />`;
+        inner = `<rect x="${x-25}" y="${y-r}" width="50" height="${r*2}" rx="4" />`;
     }
     
     return `<g fill="#111111" filter="url(#plastic-3d-${panelId})">${inner}</g>`;
@@ -3488,7 +3913,6 @@ function generateSVGForSimulation(root, panelId = 'p') {
         depthGroups[d].push(node);
     }
     
-    const spacingX = 90; 
     const spacingY = 55;
     const posMap = new Map(); 
     
@@ -3497,12 +3921,47 @@ function generateSVGForSimulation(root, panelId = 'p') {
             posMap.set(depthGroups[0][i], { x: 0, y: i * spacingY });
         }
     }
+    
+    function getNodeWidth(n) {
+        if (!n.isGate) return 24;
+        const numInputs = n.children ? n.children.length : 2;
+        let r = 25;
+        if (numInputs === 3) r = 30;
+        else if (numInputs === 4) r = 35;
+        else if (numInputs > 4) r = 40;
+        return r + 12;
+    }
+
+    const levelX = [0];
     for (let d = 1; d < depthGroups.length; d++) {
+        let maxRight = 0;
+        for (const prevNode of depthGroups[d-1]) {
+            const prevPos = posMap.get(prevNode);
+            if (prevPos) {
+                const w = getNodeWidth(prevNode);
+                if (prevPos.x + w > maxRight) {
+                    maxRight = prevPos.x + w;
+                }
+            }
+        }
+        levelX[d] = maxRight + 65; // 65px clearance for trace + parent input pin
+
         for (const node of depthGroups[d]) {
-            let sumY = 0;
             if (node.children) {
-                for (const child of node.children) sumY += posMap.get(child).y;
-                posMap.set(node, { x: d * spacingX, y: sumY / node.children.length });
+                const numC = node.children.length;
+                let targetY = 0;
+                if (numC === 2) {
+                    targetY = (posMap.get(node.children[0]).y + posMap.get(node.children[1]).y) / 2;
+                } else if (numC === 3) {
+                    targetY = posMap.get(node.children[1]).y;
+                } else if (numC === 4) {
+                    targetY = (posMap.get(node.children[1]).y + posMap.get(node.children[2]).y) / 2;
+                } else {
+                    let sumY = 0;
+                    for (const child of node.children) sumY += posMap.get(child).y;
+                    targetY = sumY / numC;
+                }
+                posMap.set(node, { x: levelX[d], y: targetY });
             }
         }
     }
@@ -3541,13 +4000,13 @@ function generateSVGForSimulation(root, panelId = 'p') {
             }
         } else {
             left = pos.x - 35;
-            right = getGateOutputPinRange(node.type, pos.x).endX;
+            right = getGateOutputPinRange(node.type, pos.x, node.children ? node.children.length : 2).endX;
             top = pos.y - 28;
             bottom = pos.y + 25;
         }
         
         if (node === root) {
-            const rootOutX = root.isGate ? getGateOutputPinRange(root.type, pos.x).endX : pos.x;
+            const rootOutX = root.isGate ? getGateOutputPinRange(root.type, pos.x, root.children ? root.children.length : 2).endX : pos.x;
             const extraOutLen = root.isGate ? 0 : 80;
             const ledX = rootOutX + 40 + extraOutLen; 
             right = ledX + 25;
@@ -3711,11 +4170,14 @@ function generateSVGForSimulation(root, panelId = 'p') {
                     const cX = childPos.x + dx;
                     const cY = childPos.y + dy;
 
-                    let sourceX = child.isGate ? getGateOutputPinRange(child.type, cX).endX : cX;
+                    let sourceX = child.isGate ? getGateOutputPinRange(child.type, cX, child.children ? child.children.length : 2).endX : cX;
                     const targetY = startPortY + i * portSpacing;
                     // Add a tiny 0.5px vertical offset to avoid 0-height SVG bounding box clipping by filters
                     const adjustedTargetY = (cY === targetY) ? targetY + 0.5 : targetY;
-                    const midX = Math.max(sourceX + 20, tx - 35);
+                    let midX = Math.max(sourceX + 12, tx - 42);
+                    if (numInputs === 4 && (i === 1 || i === 2)) {
+                        midX = Math.max(sourceX + 5, tx - 58);
+                    }
                     const endX = tx - 35;
 
                     const childState = evaluateSimLogic(child);
@@ -3736,7 +4198,7 @@ function generateSVGForSimulation(root, panelId = 'p') {
     const rootX = rootPos.x + dx;
     const rootY = rootPos.y + dy;
     const finalState = evaluateSimLogic(root);
-    const rootOutX = root.isGate ? getGateOutputPinRange(root.type, rootX).endX : rootX;
+    const rootOutX = root.isGate ? getGateOutputPinRange(root.type, rootX, root.children ? root.children.length : 2).endX : rootX;
     const extraOutLen = root.isGate ? 0 : 80;
     const ledX = rootOutX + 40 + extraOutLen; 
     const ledY = rootY;
@@ -3764,7 +4226,7 @@ function generateSVGForSimulation(root, panelId = 'p') {
                 svgContent += `<rect x="${x-24}" y="${y-24}" width="48" height="48" rx="7" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.6" filter="url(#silkscreen-${panelId})"/>`;
             }
         } else {
-            svgContent += getSimGateSilkscreen(node.type, x, y, panelId);
+            svgContent += getSimGateSilkscreen(node.type, x, y, panelId, node.children ? node.children.length : 2);
         }
     }
 
@@ -3826,11 +4288,11 @@ function generateSVGForSimulation(root, panelId = 'p') {
                 svgContent += `<rect x="${pinStartX}" y="${py - 2}" width="${pinEndX - pinStartX}" height="4" fill="url(#metal-pin-${panelId})" filter="url(#trace-3d-inactive-${panelId})"/>`;
             }
             // Draw output pin
-            const pinRange = getGateOutputPinRange(node.type, x);
+            const pinRange = getGateOutputPinRange(node.type, x, numInputs);
             svgContent += `<rect x="${pinRange.startX}" y="${y - 2}" width="${pinRange.endX - pinRange.startX}" height="4" fill="url(#metal-pin-${panelId})" filter="url(#trace-3d-inactive-${panelId})"/>`;
             
             // Gate body
-            svgContent += getSimGateShape(node.type, x, y, panelId);
+            svgContent += getSimGateShape(node.type, x, y, panelId, numInputs);
             
             // Silkscreen type label
             svgContent += `<text x="${x}" y="${y - 28}" font-family="JetBrains Mono,monospace" font-size="12" font-weight="bold" fill="#ddd" text-anchor="middle" stroke="#1A4E2C" stroke-width="3" paint-order="stroke fill">${node.type}</text>`;
@@ -4165,6 +4627,9 @@ function render2DKMap(numVars, variables, minterms, dontCares, activeSolution, i
 }
 
 function handleKMapCellClick(minterm) {
+    if (typeof wrapDragState !== 'undefined' && wrapDragState.hasMoved) {
+        return;
+    }
     if (!lastKMapData) return;
     
     let { variables, minterms, dontCares } = lastKMapData;
@@ -5606,7 +6071,7 @@ function _kmap3DAnimate() {
 }
 
 let kmapWrapInitialized = false;
-let wrapDragState = { isDragging: false, startX: 0, startY: 0, offX: 0, offY: 0 };
+let wrapDragState = { isDragging: false, startX: 0, startY: 0, offX: 0, offY: 0, hasMoved: false };
 
 function renderWrapKMap(numVars, variables, minterms, dontCares, activeSolution, isSOP) {
     const container2D = document.getElementById('kmap-grid-container');
@@ -5717,12 +6182,16 @@ function renderWrapKMap(numVars, variables, minterms, dontCares, activeSolution,
             wrapDragState.isDragging = true;
             wrapDragState.startX = e.clientX;
             wrapDragState.startY = e.clientY;
+            wrapDragState.hasMoved = false;
             wrapContainer.style.cursor = 'grabbing';
         });
         window.addEventListener('mousemove', (e) => {
             if (!wrapDragState.isDragging) return;
             const dx = e.clientX - wrapDragState.startX;
             const dy = e.clientY - wrapDragState.startY;
+            if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+                wrapDragState.hasMoved = true;
+            }
             wrapDragState.offX += dx;
             wrapDragState.offY += dy;
             wrapDragState.startX = e.clientX;
@@ -5744,6 +6213,7 @@ function renderWrapKMap(numVars, variables, minterms, dontCares, activeSolution,
                 wrapDragState.isDragging = true;
                 wrapDragState.startX = e.touches[0].clientX;
                 wrapDragState.startY = e.touches[0].clientY;
+                wrapDragState.hasMoved = false;
             }
         }, { passive: false });
 
@@ -5752,6 +6222,9 @@ function renderWrapKMap(numVars, variables, minterms, dontCares, activeSolution,
                 e.preventDefault();
                 const dx = e.touches[0].clientX - wrapDragState.startX;
                 const dy = e.touches[0].clientY - wrapDragState.startY;
+                if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+                    wrapDragState.hasMoved = true;
+                }
                 wrapDragState.offX += dx;
                 wrapDragState.offY += dy;
                 wrapDragState.startX = e.touches[0].clientX;

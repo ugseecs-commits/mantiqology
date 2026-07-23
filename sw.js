@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mantiq-cache-v1';
+const CACHE_NAME = 'mantiq-cache-v2';
 
 // List all the files your game needs to run
 const urlsToCache = [

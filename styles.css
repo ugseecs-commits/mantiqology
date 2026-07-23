@@ -10,6 +10,7 @@
     --accent: #2563eb;
     --accent-hover: #1d4ed8;
     --accent-light: rgba(37, 99, 235, 0.15);
+    --accent-rgb: 37, 99, 235;
     --border: #334155;
     --border-focus: #475569;
     --text-primary: #f8fafc;
@@ -41,6 +42,7 @@
         --accent: #2563eb;
         --accent-hover: #1d4ed8;
         --accent-light: rgba(37, 99, 235, 0.1);
+        --accent-rgb: 37, 99, 235;
         --border: #e2e8f0;
         --border-focus: #cbd5e1;
         --text-primary: #0f172a;
@@ -65,6 +67,7 @@ body.light-mode {
     --accent: #2563eb;
     --accent-hover: #1d4ed8;
     --accent-light: rgba(37, 99, 235, 0.1);
+    --accent-rgb: 37, 99, 235;
     --border: #e2e8f0;
     --border-focus: #cbd5e1;
     --text-primary: #0f172a;
@@ -95,6 +98,7 @@ body.dark-mode {
     --accent: #2563eb;
     --accent-hover: #1d4ed8;
     --accent-light: rgba(37, 99, 235, 0.15);
+    --accent-rgb: 37, 99, 235;
     --border: #334155;
     --border-focus: #475569;
     --text-primary: #f8fafc;
@@ -130,31 +134,16 @@ body {
 /* App Grid Layout */
 #app-root {
     display: grid;
-    /* minmax(0, 1fr) instead of a bare 1fr: a plain 1fr track has an
-       implicit min width equal to its content's min-content size, so it
-       won't shrink below that - it grows the whole grid (and the page)
-       instead. minmax(0, 1fr) lets the column actually shrink to fit,
-       so overflow is handled by the carousel's own scroller instead of
-       ballooning the page. */
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-    grid-template-rows: 100%;
+    grid-template-rows: auto 1fr;
     width: 100%;
     height: 100%;
-    transition: grid-template-columns .3s cubic-bezier(.4,0,.2,1);
 }
 
-/* Sidebar Expanded State */
-#app-root.sidebar-expanded {
-    grid-template-columns: 240px minmax(0, 1fr);
-}
-
-/* ==========================================================================
-   Google-style Landing / Home Screen
-   ========================================================================== */
 #app-root.landing,
 #app-root.showing-examples {
     grid-template-columns: 0px minmax(0, 1fr);
-    grid-template-rows: 100%;
+    grid-template-rows: auto 1fr;
 }
 
 #app-root.landing #sidebar,
@@ -169,10 +158,11 @@ body {
 }
 
 /* ==========================================================================
-   Sidebar Navigation (Material Design 3 Collapsible Drawer)
+   Sidebar Navigation — fixed icon-only strip
    ========================================================================== */
 #sidebar {
     grid-column: 1;
+    grid-row: 2;
     background: var(--bg-tertiary);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -180,113 +170,51 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 16px 0;
+    padding: 12px 0;
     z-index: 10;
-    justify-content: space-between;
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
-}
-
-.sidebar-header {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    height: 48px;
-    padding: 0 16px;
-    margin-bottom: 24px;
-    gap: 16px;
-}
-
-.sidebar-toggle-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition-fast);
-    flex-shrink: 0;
-}
-
-.sidebar-toggle-btn:hover {
-    color: var(--text-primary);
-    background-color: rgba(255, 255, 255, 0.08);
-}
-
-.sidebar-brand-text {
-    font-family: 'Outfit', sans-serif;
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: lowercase;
-    color: var(--text-primary);
-    opacity: 0;
-    width: 0;
-    overflow: hidden;
-    transition: opacity 0.25s ease, width 0.25s ease;
-}
-
-#app-root.sidebar-expanded .sidebar-brand-text {
-    opacity: 1;
-    width: auto;
 }
 
 .nav-links {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 4px;
     width: 100%;
     align-items: center;
     flex-grow: 1;
-    padding: 0 10px;
-}
-
-#app-root.sidebar-expanded .nav-links {
-    align-items: flex-start;
+    padding: 0 8px;
 }
 
 .nav-btn {
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    width: 56px;
-    height: 44px;
-    border-radius: 22px;
+    width: 54px;
+    height: 46px;
+    border-radius: 14px;
     cursor: pointer;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     padding: 0;
-}
-
-#app-root.sidebar-expanded .nav-btn {
-    width: 100%;
-    height: 48px;
-    border-radius: 24px;
-    justify-content: flex-start;
-    padding: 0 16px;
 }
 
 .nav-icon-wrapper {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 56px;
-    height: 32px;
-    border-radius: 16px;
+    width: 40px;
+    height: 36px;
+    border-radius: 12px;
     transition: background-color 0.2s ease, color 0.2s ease;
     flex-shrink: 0;
 }
 
 .nav-btn svg {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     transition: transform var(--transition-fast);
 }
 
@@ -296,56 +224,33 @@ body {
 }
 
 .nav-btn:hover svg {
-    transform: scale(1.05);
+    transform: scale(1.08);
 }
 
 .nav-btn.active .nav-icon-wrapper {
     background-color: var(--accent-light);
     color: var(--accent);
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
 }
 
 .nav-btn.active svg {
-    stroke-width: 2.5px;
+    stroke-width: 2.2px;
 }
 
-.nav-label {
-    font-size: 14px;
-    font-weight: 500;
-    white-space: nowrap;
-    opacity: 0;
-    width: 0;
-    overflow: hidden;
-    transition: opacity 0.2s ease, width 0.2s ease, margin 0.2s ease;
-}
-
-#app-root.sidebar-expanded .nav-label {
-    opacity: 1;
-    width: auto;
-    margin-left: 12px;
-    color: var(--text-secondary);
-}
-
-#app-root.sidebar-expanded .nav-btn.active .nav-label {
-    color: var(--text-primary);
-    font-weight: 600;
-}
-
-/* Tooltips (disabled in expanded mode) */
+/* Tooltips */
 .nav-btn .tooltip {
     position: absolute;
-    left: 70px;
+    left: calc(var(--sidebar-width) + 4px);
     background-color: var(--bg-secondary);
     color: var(--text-primary);
     font-size: 12px;
     font-weight: 500;
-    padding: 6px 12px;
+    padding: 5px 10px;
     border-radius: 6px;
     border: 1px solid var(--border);
     white-space: nowrap;
     opacity: 0;
     pointer-events: none;
-    transform: translateX(-8px);
+    transform: translateX(-4px);
     transition: opacity 0.15s ease, transform 0.15s ease;
     z-index: 100;
 }
@@ -355,20 +260,6 @@ body {
     transform: translateX(0);
 }
 
-#app-root.sidebar-expanded .tooltip {
-    display: none !important;
-}
-
-.sidebar-footer {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-}
-
-.sidebar-footer .version {
-    font-size: 11px;
-    color: var(--text-muted);
-}
 
 /* ==========================================================================
    Main Workspace & Topbar Morph Layout
@@ -377,10 +268,10 @@ body {
     display: flex;
     flex-direction: column;
     grid-column: 2;
+    grid-row: 2;
     height: 100%;
     width: 100%;
-    min-width: 0; /* stop unshrinkable children (e.g. the solutions
-                     carousel) from pushing this wider than its grid track */
+    min-width: 0;
     position: relative;
     transition: opacity 0.15s ease-in-out;
 }
@@ -400,6 +291,8 @@ body {
 }
 
 #topbar {
+    grid-column: 1 / -1;
+    grid-row: 1;
     background-color: var(--bg-tertiary);
     backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border);
@@ -408,8 +301,8 @@ body {
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
-    min-width: 0; /* same reasoning as #main-workspace above */
-    z-index: 10;
+    min-width: 0;
+    z-index: 20;
 }
 
 /* Topbar in landing mode */
@@ -422,6 +315,7 @@ body {
     align-items: center;
     width: min(640px, 90vw);
     margin: 0;
+    margin-left: 0;
     padding: 0;
     gap: 0;
 }
@@ -539,6 +433,7 @@ body {
 .pill-toggle[data-state="light"] .pill-slider,
 .pill-toggle[data-state="wrap"] .pill-slider,
 .pill-toggle[data-state="3d"] .pill-slider,
+.pill-toggle[data-state="no-tb"] .pill-slider,
 .pill-toggle[data-state="qm"] .pill-slider {
     transform: translateX(100%);
 }
@@ -563,6 +458,10 @@ body {
 
 .theme-toggle .pill-option {
     padding: 6px 12px;
+}
+
+.verilog-tb-toggle .pill-option {
+    min-width: 100px;
 }
 
 .pill-option.active {
@@ -640,7 +539,7 @@ body {
 }
 
 .solution-card .expr-text {
-    font-family: 'Fira Code', 'JetBrains Mono', monospace;
+    font-family: 'STIX Two Text', 'Outfit', serif;
     font-size: 15px;
     font-weight: 600;
     color: var(--success);
@@ -693,7 +592,7 @@ body {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border);
     color: var(--text-primary);
-    font-family: 'Fira Code', 'JetBrains Mono', monospace;
+    font-family: 'STIX Two Text', 'Outfit', serif;
     font-size: 16px;
     font-weight: 500;
     letter-spacing: 0.2px;
@@ -954,12 +853,15 @@ body {
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
+    vertical-align: top;
 }
 
 .guide-table td {
     padding: 10px 14px;
     border-bottom: 1px solid var(--border);
     color: var(--text-primary);
+    line-height: 1.6;
+    vertical-align: top;
 }
 
 .guide-table tr:last-child td {
@@ -974,7 +876,10 @@ body {
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
     color: var(--accent);
-    white-space: nowrap;
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: inline-block;
+    margin: 2px 0;
 }
 
 /* SOP/POS toggle button style */
@@ -1386,76 +1291,48 @@ canvas.emscripten {
     padding: 48px 20px;
 }
 
+/* ── QM Section (top-level grouping: SOP Minimization / POS) ───────────── */
 .qm-section {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .qm-section + .qm-section {
-    margin-top: 4px;
-    padding-top: 22px;
+    margin-top: 0;
+    padding-top: 18px;
     border-top: 1px solid var(--border);
 }
 
-/* Section headers (e.g. SOP / POS) are the top of the hierarchy:
-   bigger, bolder, with a colored icon badge - unmistakably a different
-   tier from the step headers nested inside them. */
+/* Section title: larger, bold, no color badge — pure typography */
 .qm-section-title {
-    font-size: 18px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
 }
 
-.qm-section-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
-    font-size: 15px;
-    font-weight: 700;
-    font-family: 'Fira Code', 'JetBrains Mono', monospace;
-    background-color: var(--accent-light);
-    color: var(--accent);
-    flex-shrink: 0;
-}
-
-/* SOP and POS get the same blue/purple pairing used everywhere else in
-   the app (truth table, K-map, circuit view) so this modal reads as
-   part of the same product instead of inventing its own scheme. */
-.qm-section-title.sop .qm-section-icon {
-    background-color: var(--accent-light);
-    color: var(--sop-color, var(--accent));
-}
-
-.qm-section-title.pos .qm-section-icon {
-    background-color: rgba(124, 58, 237, 0.15);
-    color: var(--pos-color, #7c3aed);
-}
-
-/* Step headers are deliberately smaller, lighter-weight and muted -
-   clearly one level below the section title above them. */
+/* ── QM Step (collapsible numbered sub-section) ────────────────────────── */
 .qm-step {
-    border-radius: 8px;
+    border-radius: 6px;
     margin-bottom: 2px;
 }
 
 .qm-step + .qm-step {
-    margin-top: 8px;
+    margin-top: 4px;
 }
 
 .qm-step-summary {
     list-style: none;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 10px;
+    gap: 10px;
+    padding: 6px 8px;
     cursor: pointer;
     user-select: none;
     transition: var(--transition-fast);
@@ -1471,33 +1348,32 @@ canvas.emscripten {
 }
 
 .qm-step-summary:hover {
-    background-color: rgba(255, 255, 255, 0.03);
+    background-color: rgba(255, 255, 255, 0.04);
 }
 
 .qm-step-num {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
+    font-family: 'Outfit', sans-serif;
     flex-shrink: 0;
-}
-
-.qm-step.sop .qm-step-num {
-    color: var(--sop-color, var(--accent));
-}
-
-.qm-step.pos .qm-step-num {
-    color: var(--pos-color, #7c3aed);
+    line-height: 1;
 }
 
 .qm-step-title {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--text-secondary);
     flex-grow: 1;
+    font-family: 'Outfit', sans-serif;
 }
 
 .qm-chevron {
@@ -1511,22 +1387,24 @@ canvas.emscripten {
 }
 
 .qm-step-body {
-    padding: 0px 10px 14px 46px;
+    padding: 4px 8px 10px 38px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
 }
 
+/* Sub-heading inside a step body (e.g. "Initial Term Binary Representations") */
 .qm-h3 {
-    font-size: 11.5px;
+    font-size: 10.5px;
     color: var(--text-muted);
-    margin-top: 4px;
+    margin-top: 6px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     display: flex;
     align-items: center;
     gap: 6px;
+    font-family: 'Outfit', sans-serif;
 }
 
 .qm-status-dot {
@@ -1540,98 +1418,325 @@ canvas.emscripten {
 .qm-block {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
 }
 
+/* ── QM Row (generic data line) ─────────────────────────────────────────── */
 .qm-row {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 12.5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex-wrap: wrap;
-    padding: 4px 0;
+    padding: 3px 0;
+}
+
+.qm-term-list-row {
+    align-items: center;
+}
+
+.qm-term-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ── Term Badge (binary code + literal label) ───────────────────────────── */
+.qm-term-badge {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+    padding: 4px 10px 5px;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+}
+
+.qm-term-badge .qm-term-bin {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+}
+
+.qm-term-badge .qm-term-lit {
+    font-family: 'Times New Roman', Times, serif;
+    font-style: italic;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: center;
+}
+
+.qm-lit-var {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 9px;
+    text-align: center;
+    line-height: 1;
+}
+
+.qm-lit-var.neg {
+    text-decoration: overline;
+    text-decoration-thickness: 1px;
+}
+
+.qm-lit-dash {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 9px;
+    text-align: center;
+    color: var(--text-faint, var(--text-muted));
+    opacity: 0.5;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+
+/* Result badges: accent color, visually distinguishable as a "final" term */
+.qm-term-badge.result {
+    background-color: rgba(var(--accent-rgb, 37, 99, 235), 0.08);
+    border-color: rgba(var(--accent-rgb, 37, 99, 235), 0.2);
+}
+
+.qm-term-badge.result .qm-term-bin { color: var(--accent); }
+.qm-term-badge.result .qm-term-lit { color: var(--accent); opacity: 0.85; }
+
+/* ── Num Chip (plain decimal minterm indices) ────────────────────────────── */
+.qm-num-chip {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 3px 8px;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Discarded / dominated implicants */
+.qm-row-discarded {
+    opacity: 0.55;
+}
+
+.qm-row-discarded .qm-term-badge.discarded .qm-term-bin,
+.qm-row-discarded .qm-term-badge.discarded .qm-term-lit {
+    text-decoration: line-through;
+}
+
+.badge.discarded {
+    color: var(--danger, #ef4444);
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+.badge.dc {
+    color: var(--text-muted);
+    background-color: rgba(255, 255, 255, 0.04);
+    text-transform: none;
+    font-weight: 500;
+}
+
+/* Note lines ("No more merges possible.", etc.) */
+.qm-row-note {
+    font-family: 'Outfit', sans-serif;
+    font-style: italic;
+    color: var(--text-muted);
+    font-size: 12px;
+    letter-spacing: 0.01em;
 }
 
 .qm-row-label {
     font-family: 'Outfit', sans-serif;
     font-size: 10.5px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
     display: inline-flex;
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .qm-row-op {
-    color: var(--text-muted);
+    color: var(--text-secondary);
+    opacity: 0.6;
     font-weight: 600;
+    font-size: 13px;
     flex-shrink: 0;
 }
 
-/* Essential prime-implicant rows are flagged with a left rule and a
-   starred label, tinted to match the SOP/POS section they're in -
-   no separate hue introduced just for this. */
 .qm-row-pi {
     border-left: 2px solid var(--border-focus);
     padding-left: 10px;
-}
-
-.qm-row-pi.sop {
-    border-left-color: rgba(37, 99, 235, 0.45);
-}
-
-.qm-row-pi.pos {
-    border-left-color: rgba(124, 58, 237, 0.45);
 }
 
 .qm-row-label.pi {
     color: var(--text-secondary);
 }
 
-.qm-row-label.pi.sop {
-    color: var(--sop-color, var(--accent));
+/* ── Merge Rows (A + B = C) ───────────────────────────────────────────── */
+.qm-merge-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
 }
 
-.qm-row-label.pi.pos {
-    color: var(--pos-color, #7c3aed);
-}
-
-.qm-final {
+.qm-merge-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 10px;
     flex-wrap: wrap;
-    gap: 8px 16px;
-    background-color: transparent;
-    border-top: 1px dashed var(--border);
-    padding: 16px 10px;
-    margin-top: 10px;
+}
+
+.qm-merge-row:not(:last-child) {
+    border-bottom: 1px solid var(--border);
+}
+
+.qm-merge-row:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.qm-merge-op {
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* ── Prime-Implicant Cards ───────────────────────────────────────────── */
+.qm-pi-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-left: 2px solid rgba(var(--accent-rgb, 37, 99, 235), 0.3);
+    padding-left: 10px;
+}
+
+.qm-pi-card {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+}
+
+.qm-pi-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.qm-pi-card-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    opacity: 0.85;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.qm-pi-card-covers {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.qm-pi-covers-op {
+    font-family: 'Outfit', sans-serif;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding-top: 3px;
+}
+
+/* ── Final Result Box ────────────────────────────────────────────────────── */
+.qm-final {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border-focus, var(--accent));
+    background-color: rgba(var(--accent-rgb, 37, 99, 235), 0.06);
 }
 
 .qm-final-label {
-    font-size: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 10.5px;
     font-weight: 700;
-    color: var(--success);
+    color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.07em;
 }
 
-.qm-final-value {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 14px;
+.qm-final-terms {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.qm-final-terms .qm-term-badge {
+    padding: 6px 14px 7px;
+    background-color: rgba(var(--accent-rgb, 37, 99, 235), 0.05);
+    border-color: rgba(var(--accent-rgb, 37, 99, 235), 0.2);
+}
+
+.qm-final-terms .qm-term-badge .qm-term-bin {
+    font-size: 13px;
+    color: var(--accent);
+}
+
+.qm-final-terms .qm-term-badge .qm-term-lit {
+    font-size: 15px;
+    color: var(--accent);
+    opacity: 0.8;
+}
+
+.qm-final-plus {
+    color: var(--text-muted);
     font-weight: 600;
-    color: var(--text-primary);
-    word-break: break-all;
+    font-size: 15px;
 }
 
-/* Log badges - just two roles, not a rainbow of one-off colors:
-   a quiet neutral chip for a term being referenced, and a chip for a
-   newly-derived/selected term that borrows the section's own SOP/POS
-   color instead of introducing anything new. */
+.qm-final-dot {
+    font-size: 22px;
+    line-height: 1;
+}
+
+/* Log badges - uniform styling for SOP and POS */
 .badge {
     padding: 3px 9px;
     border-radius: 6px;
@@ -1653,16 +1758,6 @@ canvas.emscripten {
     background-color: var(--accent-light);
     color: var(--accent);
     border-color: rgba(37, 99, 235, 0.25);
-}
-
-.badge.result.sop {
-    color: var(--sop-color, var(--accent));
-}
-
-.badge.result.pos {
-    background-color: rgba(124, 58, 237, 0.15);
-    color: var(--pos-color, #7c3aed);
-    border-color: rgba(124, 58, 237, 0.3);
 }
 
 /* Alternative solutions row list */
@@ -1831,12 +1926,13 @@ canvas.emscripten {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 20px;
+    overflow-x: hidden;
+    padding: 16px;
     font-family: 'Outfit', sans-serif;
     line-height: 1.6;
     background: rgba(0, 0, 0, 0.15);
     border-radius: 8px;
-    margin-top: 15px;
+    margin-top: 12px;
     border: 1px solid var(--border);
 }
 
@@ -2716,8 +2812,8 @@ canvas.emscripten {
 .kmap-minterm-label { position: absolute; top: 3px; left: 4px; font-size: 12px; color: var(--text-muted); opacity: 0.7; pointer-events: none; font-weight: normal; }
 
 /* Algebraic Solution Styles */
-.solution-panel { padding: 20px; overflow-y: hidden; display: flex; flex-direction: column; min-height: 0; }
-.solution-content-wrapper { padding: 15px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border); line-height: 1.6; color: var(--text-primary); overflow-y: auto; flex: 1; min-height: 0; }
+.solution-panel { padding: 18px; overflow-y: hidden; display: flex; flex-direction: column; min-height: 0; }
+.solution-content-wrapper { padding: 14px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border); line-height: 1.6; color: var(--text-primary); overflow-y: auto; flex: 1; min-height: 0; }
 .solution-empty { color: var(--text-muted); font-style: italic; }
 
 .solution-split-view {
@@ -2734,6 +2830,28 @@ canvas.emscripten {
     width: 100%;
     height: 44px;
     margin-top: 12px;
+}
+
+/* No algebraic proof to switch to - there's nothing to toggle between, so
+   the tab bar (and its "Algebraic Proof" pill) is hidden outright. When the
+   tab bar is hidden on mobile, CSS overrides panel visibility directly
+   instead of relying on JS to change data-active-tab (which caused the
+   mid-typing auto-switch bug). */
+#solution-mobile-tabs.alg-unavailable {
+    display: none !important;
+}
+
+/* On mobile, when alg is unavailable, always show QM regardless of
+   data-active-tab so the user sees something useful even if JS hasn't
+   updated the tab state yet. Only applies inside the mobile breakpoint
+   where the two panels are mutually exclusive. */
+@media (max-width: 768px) {
+    #solution-split-view:has(~ #solution-mobile-tabs.alg-unavailable) #panel-alg {
+        display: none !important;
+    }
+    #solution-split-view:has(~ #solution-mobile-tabs.alg-unavailable) #panel-qm {
+        display: flex !important;
+    }
 }
 
 .mobile-bottom-tabs .pill-toggle {
@@ -2769,12 +2887,16 @@ canvas.emscripten {
    and the group boxes silently fail to render once you pan. */
 #kmap-wrap-svg-overlay { overflow: visible; }
 
-/* Algebraic Proof Steps */
+/* Algebraic Proof Steps
+   Expression and reason are stacked on their own lines rather than sharing
+   one flex row - a long expression can wrap freely on any width without
+   ever crowding, colliding with, or reflowing under the reason pill. */
 .algebraic-step {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 12px 8px;
     border-bottom: 1px solid var(--border);
     margin: 0;
 }
@@ -2788,19 +2910,20 @@ canvas.emscripten {
 }
 
 .alg-expr {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'STIX Two Text', 'Outfit', serif;
     font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
-    flex: 1;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.01em;
+    width: 100%;
 }
 
 .alg-reason {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-left: 16px;
+    align-self: flex-end;
+    margin-left: 0;
     flex-shrink: 0;
 }
 
@@ -2809,33 +2932,18 @@ canvas.emscripten {
     font-size: 11px;
     color: var(--text-muted);
     font-weight: 500;
-    font-style: italic;
 }
 
 .alg-rule {
     font-family: 'Outfit', sans-serif;
     font-size: 11.5px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    padding: 2px 0;
+    font-weight: 600;
+    color: var(--accent);
     letter-spacing: 0.02em;
     text-transform: uppercase;
-}
-
-.alg-rule.pos, .alg-rule.sop {
-    /* override previous badges if needed, keeping it minimal */
-    background-color: transparent;
+    background: transparent;
     border: none;
-}
-
-.alg-rule.pos {
-    color: var(--pos-color, #7c3aed);
-    background-color: rgba(124, 58, 237, 0.1);
-    border-color: rgba(124, 58, 237, 0.2);
-}
-
-.alg-rule.sop {
-    color: var(--sop-color, var(--accent));
+    padding: 0;
 }
 
 /* ==========================================================================
@@ -3291,6 +3399,21 @@ canvas.emscripten {
     .modal {
         width: 94%;
         height: 86%;
+    }
+
+    /* Compress the Learn Formats table on small phones */
+    .guide-table {
+        font-size: 11px;
+    }
+    
+    .guide-table th, .guide-table td {
+        padding: 8px 6px;
+    }
+    
+    .guide-table code {
+        font-size: 9.5px;
+        padding: 2px 4px;
+        letter-spacing: -0.3px;
     }
 }
 
