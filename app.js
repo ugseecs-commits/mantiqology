@@ -4650,7 +4650,17 @@ function render2DKMap(numVars, variables, minterms, dontCares, activeSolution, i
 }
 
 function handleKMapCellClick(minterm) {
-    if (typeof wrapDragState !== 'undefined' && wrapDragState.hasMoved) {
+    // wrapDragState.hasMoved is only meaningful for a click that originated
+    // in the Wrap view (it suppresses the native click that follows a
+    // drag-to-pan gesture there). It's only ever reset back to false at the
+    // START of the *next* Wrap-view pointer-down — never when the user
+    // leaves Wrap view. So a pan/drag in Wrap view left it stuck at `true`,
+    // and every subsequent tap in the 2D or 3D view (which share this same
+    // handler) was silently swallowed by this check, since nothing in
+    // those views ever cleared it. Scoping the check to kmapViewMode ===
+    // 'wrap' keeps the intended guard there without it leaking into the
+    // other views.
+    if (kmapViewMode === 'wrap' && typeof wrapDragState !== 'undefined' && wrapDragState.hasMoved) {
         return;
     }
     if (!lastKMapData) return;
@@ -5272,7 +5282,7 @@ let kmap3DState = {
     _groupHelpers: [],
     _rot: { theta: 0.7, phi: 1.05, radius: 8.5 },
     _vel: { theta: 0, phi: 0 },
-    _drag: { active: false, moved: false, lastX: 0, lastY: 0 },
+    _drag: { active: false, moved: false, startX: 0, startY: 0, lastX: 0, lastY: 0 },
     _resizeObserver: null,
     _resizeHandler: null
 };
@@ -5901,6 +5911,8 @@ function _wireKMap3DInteractions() {
     const onDown = (clientX, clientY) => {
         kmap3DState._drag.active = true;
         kmap3DState._drag.moved = false;
+        kmap3DState._drag.startX = clientX;
+        kmap3DState._drag.startY = clientY;
         kmap3DState._drag.lastX = clientX;
         kmap3DState._drag.lastY = clientY;
         kmap3DState._vel.theta = 0;
@@ -5912,11 +5924,19 @@ function _wireKMap3DInteractions() {
         if (!kmap3DState._drag.active) return;
         const dx = clientX - kmap3DState._drag.lastX;
         const dy = clientY - kmap3DState._drag.lastY;
-        // 6px tolerance (was 2px) — 2px is well within normal mouse/finger
-        // jitter during a still click, so nearly every genuine click was
-        // being misclassified as a drag and the cell-toggle raycast in
-        // onUp() below (which only fires when `!moved`) almost never ran.
-        if (Math.abs(dx) + Math.abs(dy) > 6) kmap3DState._drag.moved = true;
+        // Classify drag-vs-tap by TOTAL displacement from the original press
+        // point, not a single inter-sample delta. The old "> 6px between
+        // this touchmove and the last one" check meant one noisy digitizer
+        // sample (a touch's reported (x,y) can jitter several px between
+        // samples even while the finger is physically still - more common
+        // on touchscreens than with a mouse) was enough to flip `moved` to
+        // true, which then made onUp() below skip its raycast/toggle
+        // entirely - a stationary tap read as a drag and silently did
+        // nothing. Requiring 10px of *cumulative* movement from the actual
+        // start point is far more resistant to that per-sample noise while
+        // still recognizing a real drag almost immediately.
+        const totalDist = Math.hypot(clientX - kmap3DState._drag.startX, clientY - kmap3DState._drag.startY);
+        if (totalDist > 10) kmap3DState._drag.moved = true;
         kmap3DState._rot.theta -= dx * 0.008;
         kmap3DState._rot.phi = Math.min(Math.max(kmap3DState._rot.phi - dy * 0.008, 0.25), Math.PI - 0.25);
         kmap3DState._drag.lastX = clientX;
