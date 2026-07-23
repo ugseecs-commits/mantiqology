@@ -3020,9 +3020,19 @@ canvas.emscripten {
     #app-root.sidebar-expanded {
         /* minmax(0, 1fr), not a bare 1fr - see the base #app-root rule for
            why a plain 1fr track refuses to shrink below its content's
-           min-content width. */
+           min-content width.
+           Three explicit rows now (header / workspace / bottom bar) - a
+           previous two-row version left #topbar on its base grid-row:1
+           with #main-workspace ALSO pinned to row 1 below, so the two
+           silently shared one grid cell: the workspace's full-height
+           glass-panel background rendered behind/around the header's
+           actual content instead of below it. */
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: minmax(0, 1fr) auto;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    #app-root:not(.landing):not(.showing-examples) #topbar {
+        grid-row: 1;
     }
 
     #app-root.landing,
@@ -3031,14 +3041,14 @@ canvas.emscripten {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    #main-workspace {
+    #app-root:not(.landing):not(.showing-examples) #main-workspace {
         grid-column: 1;
-        grid-row: 1;
+        grid-row: 2;
     }
 
     #sidebar {
         grid-column: 1;
-        grid-row: 2;
+        grid-row: 3;
         flex-direction: row;
         align-items: center;
         justify-content: center;
