@@ -13,6 +13,7 @@ private:
     static CircuitNodePtr createGateForOperator(const std::string& operatorStr, const CircuitNodePtr& left, const CircuitNodePtr& right);
     static CircuitNodePtr buildTermNode(const std::string& binary, const std::vector<std::string>& variables, bool isPOS);
     static CircuitNodePtr cloneNode(const CircuitNodePtr& node);
+    static void collapseIdenticalGates(const CircuitNodePtr& node);
 
 public:
     static CircuitNodePtr fromPostfix(const std::vector<std::string>& postfix);

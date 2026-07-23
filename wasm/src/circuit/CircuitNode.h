@@ -37,6 +37,7 @@ public:
 
     const std::vector<CircuitNodePtr>& getChildren() const { return children; }
     void addChild(const CircuitNodePtr& child);
+    void clearChildren() { children.clear(); }
 
     float getX() const { return x; }
     void setX(float val) { x = val; }

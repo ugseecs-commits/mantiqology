@@ -44,6 +44,86 @@ static std::string trim(const std::string& s) {
     return s.substr(first, (last - first + 1));
 }
 
+struct TermLiteral {
+    std::string var;
+    bool complemented;
+};
+
+static std::vector<TermLiteral> parseSopTermLiterals(const std::string& termStr) {
+    std::vector<TermLiteral> lits;
+    std::string s = trim(termStr);
+    if (s.length() >= 2 && s.front() == '(' && s.back() == ')') {
+        s = s.substr(1, s.length() - 2);
+    }
+    for (size_t i = 0; i < s.length(); ) {
+        if (std::isalnum(static_cast<unsigned char>(s[i]))) {
+            std::string v(1, s[i]);
+            size_t j = i + 1;
+            while (j < s.length() && std::isalnum(static_cast<unsigned char>(s[j]))) {
+                v += s[j];
+                j++;
+            }
+            bool comp = false;
+            if (j < s.length() && (s[j] == '\'' || s[j] == '!')) {
+                comp = true;
+                j++;
+            }
+            lits.push_back({v, comp});
+            i = j;
+        } else {
+            i++;
+        }
+    }
+    return lits;
+}
+
+static std::string sortLiteralsInTerm(const std::string& termStr) {
+    std::string s = trim(termStr);
+    bool hasParens = (s.length() >= 2 && s.front() == '(' && s.back() == ')');
+    if (hasParens) s = s.substr(1, s.length() - 2);
+
+    auto lits = parseSopTermLiterals(s);
+    std::sort(lits.begin(), lits.end(), [](const TermLiteral& a, const TermLiteral& b) {
+        if (a.var != b.var) return a.var < b.var;
+        return !a.complemented && b.complemented;
+    });
+
+    std::stringstream sb;
+    for (const auto& lit : lits) {
+        sb << lit.var;
+        if (lit.complemented) sb << "'";
+    }
+    std::string res = sb.str();
+    if (hasParens) res = "(" + res + ")";
+    return res;
+}
+
+static bool compareSopTerms(const std::string& a, const std::string& b) {
+    if (a == b) return false;
+    if (a == "0" || a == "1") return true;
+    if (b == "0" || b == "1") return false;
+
+    auto litsA = parseSopTermLiterals(a);
+    auto litsB = parseSopTermLiterals(b);
+
+    // Primary: shorter terms first (fewer literals)
+    if (litsA.size() != litsB.size()) {
+        return litsA.size() < litsB.size();
+    }
+
+    // Secondary: lexicographical comparison of literals
+    size_t minLen = std::min(litsA.size(), litsB.size());
+    for (size_t i = 0; i < minLen; i++) {
+        if (litsA[i].var != litsB[i].var) {
+            return litsA[i].var < litsB[i].var;
+        }
+        if (litsA[i].complemented != litsB[i].complemented) {
+            return !litsA[i].complemented;
+        }
+    }
+    return a < b;
+}
+
 ProcessResult ExpressionProcessor::process(const std::string& expression, bool runProof) {
     if (trim(expression).empty()) {
         return ProcessResult::empty();
@@ -69,6 +149,8 @@ ProcessResult ExpressionProcessor::process(const std::string& expression, bool r
             }
         }
     }
+
+    std::sort(variables.begin(), variables.end());
 
     if (variables.size() > 6) {
         return ProcessResult::empty();
@@ -139,10 +221,20 @@ ProcessResult ExpressionProcessor::process(const std::string& expression, bool r
     for (const auto& sol : sopResult.allSolutions) {
         allSopExprs.push_back(buildSopExpression(sol, variables));
     }
+    std::sort(allSopExprs.begin(), allSopExprs.end(), compareSopTerms);
+    allSopExprs.erase(std::unique(allSopExprs.begin(), allSopExprs.end()), allSopExprs.end());
+    if (!allSopExprs.empty()) {
+        simplifiedExpr = allSopExprs[0];
+    }
 
     std::vector<std::string> allPosExprs;
     for (const auto& sol : posResult.allSolutions) {
         allPosExprs.push_back(buildPosExpression(sol, variables));
+    }
+    std::sort(allPosExprs.begin(), allPosExprs.end(), compareSopTerms);
+    allPosExprs.erase(std::unique(allPosExprs.begin(), allPosExprs.end()), allPosExprs.end());
+    if (!allPosExprs.empty()) {
+        simplifiedExprPOS = allPosExprs[0];
     }
 
     return ProcessResult::builder()
@@ -299,10 +391,20 @@ ProcessResult ExpressionProcessor::tryParseShorthand(const std::string& expressi
             for (const auto& sol : sopResult.allSolutions) {
                 allSopExprs.push_back(buildSopExpression(sol, vars));
             }
+            std::sort(allSopExprs.begin(), allSopExprs.end(), compareSopTerms);
+            allSopExprs.erase(std::unique(allSopExprs.begin(), allSopExprs.end()), allSopExprs.end());
+            if (!allSopExprs.empty()) {
+                simplifiedExpr = allSopExprs[0];
+            }
 
             std::vector<std::string> allPosExprs;
             for (const auto& sol : posResult.allSolutions) {
                 allPosExprs.push_back(buildPosExpression(sol, vars));
+            }
+            std::sort(allPosExprs.begin(), allPosExprs.end(), compareSopTerms);
+            allPosExprs.erase(std::unique(allPosExprs.begin(), allPosExprs.end()), allPosExprs.end());
+            if (!allPosExprs.empty()) {
+                simplifiedExprPOS = allPosExprs[0];
             }
 
             return ProcessResult::builder()
@@ -449,7 +551,7 @@ std::string ExpressionProcessor::binaryToVariables(const std::string& binary, co
     }
 
     std::string body = term.str();
-    if (isPOS && literals.size() > 1) {
+    if (isPOS) {
         return "(" + body + ")";
     }
     return body;
@@ -607,10 +709,19 @@ std::string ExpressionProcessor::buildSopExpression(const std::vector<std::strin
         return "1";
     }
 
+    std::vector<std::string> formattedTerms;
+    for (const auto& term : terms) {
+        std::string raw = binaryToVariables(term, vars, false);
+        formattedTerms.push_back(sortLiteralsInTerm(raw));
+    }
+
+    std::sort(formattedTerms.begin(), formattedTerms.end(), compareSopTerms);
+    formattedTerms.erase(std::unique(formattedTerms.begin(), formattedTerms.end()), formattedTerms.end());
+
     std::stringstream sb;
-    for (size_t i = 0; i < terms.size(); i++) {
-        sb << binaryToVariables(terms[i], vars, false);
-        if (i < terms.size() - 1)
+    for (size_t i = 0; i < formattedTerms.size(); i++) {
+        sb << formattedTerms[i];
+        if (i < formattedTerms.size() - 1)
             sb << " + ";
     }
     return sb.str();
@@ -620,16 +731,24 @@ std::string ExpressionProcessor::buildPosExpression(const std::vector<std::strin
     if (terms.empty())
         return "1";
 
-    std::stringstream sb;
+    std::vector<std::string> clauses;
     for (const auto& term : terms) {
-        sb << binaryToVariables(term, vars, true);
+        clauses.push_back(binaryToVariables(term, vars, true));
+    }
+
+    std::sort(clauses.begin(), clauses.end(), compareSopTerms);
+    clauses.erase(std::unique(clauses.begin(), clauses.end()), clauses.end());
+
+    std::stringstream sb;
+    for (const auto& clause : clauses) {
+        sb << clause;
     }
     std::string result = sb.str();
 
     // A lone clause has no AND-adjacent sibling to be disambiguated from, so its
     // wrapping parens (added by binaryToVariables whenever a clause has 2+ literals)
     // are unnecessary here even though they'd be needed with a second clause present.
-    if (terms.size() == 1 && result.size() >= 2 && result.front() == '(' && result.back() == ')') {
+    if (clauses.size() == 1 && result.size() >= 2 && result.front() == '(' && result.back() == ')') {
         result = result.substr(1, result.size() - 2);
     }
     return result;

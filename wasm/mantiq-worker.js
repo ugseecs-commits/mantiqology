@@ -64,12 +64,21 @@ var Module = {
     // Suppress "no canvas" and FS warnings
     setStatus: function () {},
     totalDependencies: 0,
-    monitorRunDependencies: function () {}
+    monitorRunDependencies: function () {},
+
+    locateFile: function (path) {
+        if (path.endsWith('.wasm')) {
+            return path + '?v=1.2.0';
+        }
+        return path;
+    }
 };
 
 // Load the Emscripten-generated glue.
 // Path is relative to the worker location (mantiq-main/wasm/).
-importScripts('./index.js');
+importScripts('./index.js?v=1.2.0');
+
+let g_addTestbench = true;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -152,8 +161,8 @@ function buildSnapshot(view) {
     if (needed.has('truthTableJSON'))  snapshot.truthTableJSON  = wasmStr('mantiq_getTruthTableJSON') || '';
     if (needed.has('kMapJSON'))        snapshot.kMapJSON        = wasmStr('mantiq_getKMapJSON')       || '';
     if (needed.has('circuitJSON'))     snapshot.circuitJSON     = wasmStr('mantiq_getCircuitJSON')    || '';
-    if (needed.has('verilogGate'))     snapshot.verilogGate     = wasmStr('mantiq_getVerilogCode', ['number'], [1]) || '';
-    if (needed.has('verilogDataflow')) snapshot.verilogDataflow = wasmStr('mantiq_getVerilogCode', ['number'], [0]) || '';
+    if (needed.has('verilogGate'))     snapshot.verilogGate     = wasmStr('mantiq_getVerilogCode', ['number', 'number'], [1, g_addTestbench ? 1 : 0]) || '';
+    if (needed.has('verilogDataflow')) snapshot.verilogDataflow = wasmStr('mantiq_getVerilogCode', ['number', 'number'], [0, g_addTestbench ? 1 : 0]) || '';
     snapshot.computedFields = Array.from(needed);
 
     return snapshot;
@@ -250,7 +259,10 @@ function handleAggregate(fn, args, view) {
 // ── Message handler ──────────────────────────────────────────────────────────
 
 self.onmessage = function (event) {
-    const { id, fn, args, seq, view } = event.data;
+    const { id, fn, args, seq, view, addTestbench } = event.data;
+    if (addTestbench !== undefined) {
+        g_addTestbench = addTestbench;
+    }
 
     try {
         // Aggregate helpers → mutate + snapshot

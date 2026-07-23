@@ -35,7 +35,11 @@ CircuitNodePtr CircuitBuilder::fromPostfix(const std::vector<std::string>& postf
         }
     }
 
-    return stack.empty() ? nullptr : stack.back();
+    if (!stack.empty()) {
+        collapseIdenticalGates(stack.back());
+        return stack.back();
+    }
+    return nullptr;
 }
 
 CircuitNodePtr CircuitBuilder::fromSimplifiedTerms(const std::vector<std::string>& terms, const std::vector<std::string>& variables, bool isPOS) {
@@ -56,6 +60,7 @@ CircuitNodePtr CircuitBuilder::fromSimplifiedTerms(const std::vector<std::string
     }
 
     if (termNodes.size() == 1) {
+        collapseIdenticalGates(termNodes[0]);
         return termNodes[0];
     }
 
@@ -65,6 +70,7 @@ CircuitNodePtr CircuitBuilder::fromSimplifiedTerms(const std::vector<std::string
         root->addChild(term);
     }
 
+    collapseIdenticalGates(root);
     return root;
 }
 
@@ -197,6 +203,36 @@ CircuitNodePtr CircuitBuilder::cloneNode(const CircuitNodePtr& node) {
     }
 
     return cloneNodePtr;
+}
+
+void CircuitBuilder::collapseIdenticalGates(const CircuitNodePtr& node) {
+    if (!node) return;
+
+    for (const auto& child : node->getChildren()) {
+        collapseIdenticalGates(child);
+    }
+
+    if (node->isGate() && (node->getType() == NodeType::AND || node->getType() == NodeType::OR)) {
+        std::vector<CircuitNodePtr> newChildren;
+        const auto& originalChildren = node->getChildren();
+        for (size_t idx = 0; idx < originalChildren.size(); idx++) {
+            const auto& child = originalChildren[idx];
+            if (child->isGate() && child->getType() == node->getType()) {
+                size_t remaining = originalChildren.size() - 1 - idx;
+                if (newChildren.size() + child->getChildren().size() + remaining <= 4) {
+                    for (const auto& grandChild : child->getChildren()) {
+                        newChildren.push_back(grandChild);
+                    }
+                    continue;
+                }
+            }
+            newChildren.push_back(child);
+        }
+        node->clearChildren();
+        for (const auto& child : newChildren) {
+            node->addChild(child);
+        }
+    }
 }
 
 } // namespace com::mantiq::circuit

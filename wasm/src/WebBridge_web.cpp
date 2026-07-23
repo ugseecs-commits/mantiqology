@@ -366,7 +366,7 @@ EMSCRIPTEN_KEEPALIVE const char* mantiq_getCircuitJSON() {
     return copyToBridge(json);
 }
 
-EMSCRIPTEN_KEEPALIVE const char* mantiq_getVerilogCode(int isGateLevel) {
+EMSCRIPTEN_KEEPALIVE const char* mantiq_getVerilogCode(int isGateLevel, int addTestbench) {
     g_state.ensureCircuitsBuilt();
     CircuitNodePtr simpCircuit = g_state.getSimplifiedCircuit();
     if (!simpCircuit) return nullptr;
@@ -376,9 +376,11 @@ EMSCRIPTEN_KEEPALIVE const char* mantiq_getVerilogCode(int isGateLevel) {
         result.isAlwaysTrue()  ? "1" :
         result.isAlwaysFalse() ? "0" : "";
 
+    bool withTb = (addTestbench != 0);
+
     std::string code = isGateLevel
-        ? VerilogGenerator::generateGateLevel (simpCircuit, result.getVariables(), constantOutput)
-        : VerilogGenerator::generateDataflow  (simpCircuit, result.getVariables(), constantOutput);
+        ? VerilogGenerator::generateGateLevel (simpCircuit, result.getVariables(), constantOutput, withTb)
+        : VerilogGenerator::generateDataflow  (simpCircuit, result.getVariables(), constantOutput, withTb);
 
     return copyToBridge(code);
 }

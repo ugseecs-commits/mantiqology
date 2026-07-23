@@ -533,12 +533,22 @@ std::shared_ptr<ASTNode> ASTProver::parseQMString(const std::string& qmStr) {
         std::string current = "";
         bool inGroup = false;
         for (char c : qmStr) {
-            if (c == '(') { inGroup = true; current = ""; }
-            else if (c == ')') { inGroup = false; groups.push_back(current); }
+            if (c == '(') { 
+                if (!inGroup && !current.empty()) {
+                    groups.push_back(current);
+                }
+                inGroup = true; 
+                current = ""; 
+            }
+            else if (c == ')') { 
+                inGroup = false; 
+                groups.push_back(current); 
+                current = "";
+            }
             else if (inGroup) { current += c; }
             else if (c != ' ') { current += c; }
         }
-        if (groups.empty() && !current.empty()) {
+        if (!inGroup && !current.empty()) {
             groups.push_back(current);
         }
 
@@ -962,11 +972,36 @@ bool ASTProver::applySafeRule(std::shared_ptr<ASTNode>& node, std::string& appli
                             if (ci->type == ASTNodeType::OP_NOT && ci->children[0]->isEquivalent(gc)) isInv = true;
 
                             if (isInv) {
-                                cj->children.erase(cj->children.begin() + k);
-                                if (cj->children.size() == 1) {
-                                    node->children[j] = cj->children[0];
+                                std::vector<std::shared_ptr<ASTNode>> distributedTerms;
+                                for (auto& childOfCj : cj->children) {
+                                    std::shared_ptr<ASTNode> term;
+                                    if (node->type == ASTNodeType::OP_AND) {
+                                        term = makeAnd(ci->clone(), childOfCj->clone());
+                                    } else {
+                                        term = makeOr(ci->clone(), childOfCj->clone());
+                                    }
+                                    distributedTerms.push_back(term);
                                 }
-                                appliedRule = "Redundancy";
+
+                                std::shared_ptr<ASTNode> distributedGroup;
+                                if (node->type == ASTNodeType::OP_AND) {
+                                    distributedGroup = makeNode(ASTNodeType::OP_OR);
+                                    distributedGroup->children = distributedTerms;
+                                } else {
+                                    distributedGroup = makeNode(ASTNodeType::OP_AND);
+                                    distributedGroup->children = distributedTerms;
+                                }
+
+                                if (node->children.size() == 2) {
+                                    node = distributedGroup;
+                                } else {
+                                    size_t firstErase = std::max(i, j);
+                                    size_t secondErase = std::min(i, j);
+                                    node->children.erase(node->children.begin() + firstErase);
+                                    node->children.erase(node->children.begin() + secondErase);
+                                    node->children.push_back(distributedGroup);
+                                }
+                                appliedRule = "Distributive Law";
                                 return true;
                             }
                         }

@@ -11,11 +11,7 @@ static std::string toLower(std::string s) {
     return s;
 }
 
-std::string VerilogGenerator::generateGateLevel(const CircuitNodePtr& root, const std::vector<std::string>& variables) {
-    return generateGateLevel(root, variables, "");
-}
-
-std::string VerilogGenerator::generateGateLevel(const CircuitNodePtr& root, const std::vector<std::string>& variables, const std::string& constantOutput) {
+std::string VerilogGenerator::generateGateLevel(const CircuitNodePtr& root, const std::vector<std::string>& variables, const std::string& constantOutput, bool addTestbench) {
     if (variables.empty()) {
         return "// No circuit to generate";
     }
@@ -41,8 +37,10 @@ std::string VerilogGenerator::generateGateLevel(const CircuitNodePtr& root, cons
     if (!constantOutput.empty()) {
         std::string value = (constantOutput == "1") ? "1'b1" : "1'b0";
         sb << "buf g1(out, " << value << ");\n";
-        sb << "endmodule\n\n";
-        sb << generateTestbench(variables);
+        sb << "endmodule\n";
+        if (addTestbench) {
+            sb << "\n" << generateTestbench(variables);
+        }
         return sb.str();
     }
 
@@ -90,17 +88,14 @@ std::string VerilogGenerator::generateGateLevel(const CircuitNodePtr& root, cons
     }
 
     sb << "endmodule\n";
-    sb << "\n";
-    sb << generateTestbench(variables);
+    if (addTestbench) {
+        sb << "\n" << generateTestbench(variables);
+    }
 
     return sb.str();
 }
 
-std::string VerilogGenerator::generateDataflow(const CircuitNodePtr& root, const std::vector<std::string>& variables) {
-    return generateDataflow(root, variables, "");
-}
-
-std::string VerilogGenerator::generateDataflow(const CircuitNodePtr& root, const std::vector<std::string>& variables, const std::string& constantOutput) {
+std::string VerilogGenerator::generateDataflow(const CircuitNodePtr& root, const std::vector<std::string>& variables, const std::string& constantOutput, bool addTestbench) {
     if (variables.empty()) {
         return "// No circuit to generate";
     }
@@ -126,8 +121,10 @@ std::string VerilogGenerator::generateDataflow(const CircuitNodePtr& root, const
     if (!constantOutput.empty()) {
         std::string value = (constantOutput == "1") ? "1'b1" : "1'b0";
         sb << "assign out = " << value << ";\n";
-        sb << "endmodule\n\n";
-        sb << generateTestbench(variables);
+        sb << "endmodule\n";
+        if (addTestbench) {
+            sb << "\n" << generateTestbench(variables);
+        }
         return sb.str();
     }
 
@@ -139,8 +136,9 @@ std::string VerilogGenerator::generateDataflow(const CircuitNodePtr& root, const
     sb << "assign out = " << expression << ";\n";
     sb << "endmodule\n";
 
-    sb << "\n";
-    sb << generateTestbench(variables);
+    if (addTestbench) {
+        sb << "\n" << generateTestbench(variables);
+    }
 
     return sb.str();
 }
@@ -238,6 +236,16 @@ std::string VerilogGenerator::traverseAndBuildGates(
     return currentOutput;
 }
 
+static void collectFlatChildren(const com::mantiq::circuit::CircuitNodePtr& node, com::mantiq::circuit::NodeType parentType, std::vector<com::mantiq::circuit::CircuitNodePtr>& flatChildren) {
+    if (node && node->getType() == parentType && (parentType == com::mantiq::circuit::NodeType::AND || parentType == com::mantiq::circuit::NodeType::OR)) {
+        for (const auto& child : node->getChildren()) {
+            collectFlatChildren(child, parentType, flatChildren);
+        }
+    } else if (node) {
+        flatChildren.push_back(node);
+    }
+}
+
 std::string VerilogGenerator::generateExpression(const CircuitNodePtr& node, const std::vector<std::string>& variables) {
     if (node == nullptr)
         return "1'b0";
@@ -261,12 +269,20 @@ std::string VerilogGenerator::generateExpression(const CircuitNodePtr& node, con
         if (children.size() == 1) {
             return generateExpression(children[0], variables);
         }
+        
+        std::vector<CircuitNodePtr> flatChildren;
+        if (type == NodeType::AND || type == NodeType::OR) {
+            collectFlatChildren(node, type, flatChildren);
+        } else {
+            flatChildren = children;
+        }
+
         std::stringstream sb;
         sb << "(";
-        for (size_t i = 0; i < children.size(); i++) {
+        for (size_t i = 0; i < flatChildren.size(); i++) {
             if (i > 0)
                 sb << " " << op << " ";
-            sb << generateExpression(children[i], variables);
+            sb << generateExpression(flatChildren[i], variables);
         }
         sb << ")";
         return sb.str();

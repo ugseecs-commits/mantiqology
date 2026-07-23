@@ -23,11 +23,8 @@ private:
     static std::string generateTestbench(const std::vector<std::string>& variables);
 
 public:
-    static std::string generateGateLevel(const CircuitNodePtr& root, const std::vector<std::string>& variables);
-    static std::string generateGateLevel(const CircuitNodePtr& root, const std::vector<std::string>& variables, const std::string& constantOutput);
-
-    static std::string generateDataflow(const CircuitNodePtr& root, const std::vector<std::string>& variables);
-    static std::string generateDataflow(const CircuitNodePtr& root, const std::vector<std::string>& variables, const std::string& constantOutput);
+    static std::string generateGateLevel(const CircuitNodePtr& root, const std::vector<std::string>& variables, const std::string& constantOutput = "", bool addTestbench = true);
+    static std::string generateDataflow(const CircuitNodePtr& root, const std::vector<std::string>& variables, const std::string& constantOutput = "", bool addTestbench = true);
 };
 
 } // namespace com::mantiq::circuit
