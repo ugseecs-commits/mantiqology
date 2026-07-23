@@ -294,14 +294,28 @@ body {
     opacity: 0;
 }
 
-#app-root.landing #main-workspace {
+#app-root.landing #main-workspace,
+#app-root.showing-examples #main-workspace {
+    /* #main-workspace's base rule (above) always places it at grid-column:2
+       grid-row:2 for the normal (sidebar + content) 2-column/2-row grid.
+       Landing/showing-examples mode collapses #app-root down to a single
+       real column (and, on mobile, a single real row) - so that "2" no
+       longer points at an actual track. Without pinning it back to 1/-1
+       here, the grid has to invent a phantom extra column+row just to
+       satisfy the stale placement, and everything that's supposed to span
+       and center across the *real* track (like #topbar's `1 / -1`) ends up
+       measured against that phantom track too, visibly skewing the
+       centered landing content off to one side.
+    */
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     background: var(--bg-primary);
     height: 100%;
-      width: 100%;
+    width: 100%;
 }
 
 #topbar {
