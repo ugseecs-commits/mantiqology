@@ -68,7 +68,7 @@ var Module = {
 
     locateFile: function (path) {
         if (path.endsWith('.wasm')) {
-            return path + '?v=1.2.0';
+            return path + '?v=1.3.0';
         }
         return path;
     }
@@ -76,9 +76,10 @@ var Module = {
 
 // Load the Emscripten-generated glue.
 // Path is relative to the worker location (mantiq-main/wasm/).
-importScripts('./index.js?v=1.2.0');
+importScripts('./index.js?v=1.3.0');
 
-let g_addTestbench = true;
+let g_addTestbenchGate = true;
+let g_addTestbenchDataflow = true;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -157,12 +158,14 @@ function buildSnapshot(view) {
         return snapshot;
     }
 
-    const needed = new Set(VIEW_FIELDS[view] || []);
+    const needed = (view === -1 || view === 'all')
+        ? new Set(['truthTableJSON', 'kMapJSON', 'circuitJSON', 'verilogGate', 'verilogDataflow'])
+        : new Set(VIEW_FIELDS[view] || []);
     if (needed.has('truthTableJSON'))  snapshot.truthTableJSON  = wasmStr('mantiq_getTruthTableJSON') || '';
     if (needed.has('kMapJSON'))        snapshot.kMapJSON        = wasmStr('mantiq_getKMapJSON')       || '';
     if (needed.has('circuitJSON'))     snapshot.circuitJSON     = wasmStr('mantiq_getCircuitJSON')    || '';
-    if (needed.has('verilogGate'))     snapshot.verilogGate     = wasmStr('mantiq_getVerilogCode', ['number', 'number'], [1, g_addTestbench ? 1 : 0]) || '';
-    if (needed.has('verilogDataflow')) snapshot.verilogDataflow = wasmStr('mantiq_getVerilogCode', ['number', 'number'], [0, g_addTestbench ? 1 : 0]) || '';
+    if (needed.has('verilogGate'))     snapshot.verilogGate     = wasmStr('mantiq_getVerilogCode', ['number', 'number'], [1, g_addTestbenchGate ? 1 : 0]) || '';
+    if (needed.has('verilogDataflow')) snapshot.verilogDataflow = wasmStr('mantiq_getVerilogCode', ['number', 'number'], [0, g_addTestbenchDataflow ? 1 : 0]) || '';
     snapshot.computedFields = Array.from(needed);
 
     return snapshot;
@@ -259,9 +262,12 @@ function handleAggregate(fn, args, view) {
 // ── Message handler ──────────────────────────────────────────────────────────
 
 self.onmessage = function (event) {
-    const { id, fn, args, seq, view, addTestbench } = event.data;
-    if (addTestbench !== undefined) {
-        g_addTestbench = addTestbench;
+    const { id, fn, args, seq, view, addTestbenchGate, addTestbenchDataflow } = event.data;
+    if (addTestbenchGate !== undefined) {
+        g_addTestbenchGate = addTestbenchGate;
+    }
+    if (addTestbenchDataflow !== undefined) {
+        g_addTestbenchDataflow = addTestbenchDataflow;
     }
 
     try {

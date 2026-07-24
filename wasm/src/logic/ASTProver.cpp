@@ -310,7 +310,7 @@ std::string ASTNode::toString(bool isRoot) const {
     }
 
     if (type == ASTNodeType::OP_XOR || type == ASTNodeType::OP_XNOR || type == ASTNodeType::OP_IMPLIES) {
-        std::string opStr = (type == ASTNodeType::OP_XOR) ? " ^ " : (type == ASTNodeType::OP_XNOR) ? " = " : " -> ";
+        std::string opStr = (type == ASTNodeType::OP_XOR) ? " ⊕ " : (type == ASTNodeType::OP_XNOR) ? " ↔ " : " → ";
         std::string res = children[0]->toString(false) + opStr + children[1]->toString(false);
         return isRoot ? res : ("(" + res + ")");
     }
@@ -895,21 +895,21 @@ bool ASTProver::applySafeRule(std::shared_ptr<ASTNode>& node, std::string& appli
         auto& L = node->children[0];
         auto& R = node->children[1];
         node = makeOr(makeAnd(L->clone(), makeNot(R->clone())), makeAnd(makeNot(L->clone()), R->clone()));
-        appliedRule = "Normalize (Expand XOR)";
+        appliedRule = "Normalization (Expand XOR)";
         return true;
     }
     if (node->type == ASTNodeType::OP_XNOR) {
         auto& L = node->children[0];
         auto& R = node->children[1];
         node = makeOr(makeAnd(L->clone(), R->clone()), makeAnd(makeNot(L->clone()), makeNot(R->clone())));
-        appliedRule = "Normalize (Expand XNOR)";
+        appliedRule = "Normalization (Expand XNOR)";
         return true;
     }
     if (node->type == ASTNodeType::OP_IMPLIES) {
         auto& L = node->children[0];
         auto& R = node->children[1];
         node = makeOr(makeNot(L->clone()), R->clone());
-        appliedRule = "Normalize (Expand Implication)";
+        appliedRule = "Normalization (Expand Implication)";
         return true;
     }
 
@@ -917,7 +917,7 @@ bool ASTProver::applySafeRule(std::shared_ptr<ASTNode>& node, std::string& appli
     if (node->type == ASTNodeType::OP_AND || node->type == ASTNodeType::OP_OR) {
         if (node->children.size() == 1) {
             node = node->children[0];
-            appliedRule = "Simplify";
+            appliedRule = "Simplification";
             return true;
         }
     }
@@ -943,7 +943,7 @@ bool ASTProver::applySafeRule(std::shared_ptr<ASTNode>& node, std::string& appli
                 }
                 if (isSubset) {
                     node->children.erase(node->children.begin() + j);
-                    appliedRule = "Absorption";
+                    appliedRule = "Absorption Law";
                     return true;
                 }
             }
@@ -1084,7 +1084,7 @@ bool ASTProver::applySafeRule(std::shared_ptr<ASTNode>& node, std::string& appli
     if (node->type == ASTNodeType::OP_NOT &&
         (node->children[0]->type == ASTNodeType::OP_OR || node->children[0]->type == ASTNodeType::OP_AND)) {
         node = pushNotInward(node->children[0]);
-        appliedRule = "De Morgan's";
+        appliedRule = "De Morgan's Law";
         return true;
     }
 
@@ -1175,36 +1175,76 @@ static LitResult extractLiteralTerm(const std::shared_ptr<ASTNode>& term, ASTNod
 // dual for POS-shaping. A factor that isn't already sumType-shaped is
 // treated as a single-term sum (so plain literals/AND-terms pass through
 // untouched when distributing toward SOP, and vice versa).
+// Step-by-step Boolean distribution: distributes ONE sum-type factor over the
+// remaining factors at a time. This yields small, intuitive, human-like algebraic
+// proof steps instead of jumping directly to an N-way Cartesian expansion.
 static std::shared_ptr<ASTNode> distributeNode(std::function<std::shared_ptr<ASTNode>(ASTNodeType)> makeNodeFn,
                                                 const std::vector<std::shared_ptr<ASTNode>>& factors,
                                                 ASTNodeType sumType, ASTNodeType productType) {
-    std::vector<std::vector<std::shared_ptr<ASTNode>>> acc = {{}};
-    for (auto& f : factors) {
-        std::vector<std::shared_ptr<ASTNode>> terms;
-        if (f->type == sumType) terms = f->children; else terms.push_back(f);
-        std::vector<std::vector<std::shared_ptr<ASTNode>>> next;
-        next.reserve(acc.size() * terms.size());
-        for (auto& partial : acc) {
-            for (auto& t : terms) {
-                auto combo = partial;
-                combo.push_back(t);
-                next.push_back(std::move(combo));
+    if (factors.empty()) return nullptr;
+    if (factors.size() == 1) return factors[0]->clone();
+
+    // Find the first factor of type sumType that has children to distribute over
+    int targetIdx = -1;
+    for (size_t i = 0; i < factors.size(); i++) {
+        if (factors[i]->type == sumType && !factors[i]->children.empty()) {
+            targetIdx = (int)i;
+            break;
+        }
+    }
+
+    if (targetIdx == -1) {
+        for (size_t i = 0; i < factors.size(); i++) {
+            if (factors[i]->type == productType) {
+                for (auto& c : factors[i]->children) {
+                    if (c->type == sumType && !c->children.empty()) {
+                        targetIdx = (int)i;
+                        break;
+                    }
+                }
+                if (targetIdx != -1) break;
             }
         }
-        acc = std::move(next);
     }
-    std::vector<std::shared_ptr<ASTNode>> sumTerms;
-    sumTerms.reserve(acc.size());
-    for (auto& combo : acc) {
-        if (combo.size() == 1) { sumTerms.push_back(combo[0]->clone()); continue; }
-        auto grp = makeNodeFn(productType);
-        for (auto& c : combo) grp->children.push_back(c->clone());
-        sumTerms.push_back(grp);
+
+    if (targetIdx == -1) targetIdx = 0;
+
+    auto targetFactor = factors[targetIdx];
+    std::vector<std::shared_ptr<ASTNode>> termsToDistribute;
+    if (targetFactor->type == sumType) {
+        termsToDistribute = targetFactor->children;
+    } else {
+        termsToDistribute = { targetFactor };
     }
-    if (sumTerms.size() == 1) return sumTerms[0];
-    auto top = makeNodeFn(sumType);
-    top->children = sumTerms;
-    return top;
+
+    // Combine remaining factors into R
+    std::shared_ptr<ASTNode> R;
+    std::vector<std::shared_ptr<ASTNode>> remaining;
+    for (size_t i = 0; i < factors.size(); i++) {
+        if ((int)i != targetIdx) {
+            remaining.push_back(factors[i]->clone());
+        }
+    }
+
+    if (remaining.size() == 1) {
+        R = remaining[0];
+    } else {
+        R = makeNodeFn(productType);
+        R->children = remaining;
+    }
+
+    // Distribute R over each term in termsToDistribute
+    std::vector<std::shared_ptr<ASTNode>> distributedSumTerms;
+    for (auto& term : termsToDistribute) {
+        auto prod = makeNodeFn(productType);
+        prod->children.push_back(term->clone());
+        prod->children.push_back(R->clone());
+        distributedSumTerms.push_back(prod);
+    }
+
+    auto topSum = makeNodeFn(sumType);
+    topSum->children = distributedSumTerms;
+    return topSum;
 }
 
 // How many AND-products a distribution at this node would produce - the
@@ -1307,8 +1347,8 @@ void ASTProver::shapeForLiteralization(std::shared_ptr<ASTNode>& node, bool towa
     int guard = 0;
     while (guard++ < kMaxSafePassSteps) {
         if (!distributeOneImpureSpot(node, sumType, productType, hardCap, makeNodeFn)) break;
-        steps.push_back({towardSOP ? "Distribute (expand into Sum-of-Products form)"
-                                    : "Distribute (expand into Product-of-Sums form)",
+        steps.push_back({towardSOP ? "Distributive Law (SOP Expansion)"
+                                   : "Distributive Law (POS Factorization)",
                           node->toString()});
         // Distributing duplicates literals across the new terms (e.g. AB and
         // AC out of A(B+C)) and very often produces an immediate tautology
@@ -1511,7 +1551,7 @@ void ASTProver::bulkReduce(std::vector<Implicant>& state, std::vector<std::pair<
         // that doesn't exist here and could mislead a future change.
         int removed = 0;
         if (bulkAbsorb(state, removed)) {
-            steps.push_back({"Absorption", implicantsToAST(state, towardSOP, vars)->toString()});
+            steps.push_back({"Absorption Law", implicantsToAST(state, towardSOP, vars)->toString()});
             changed = true;
             firstPass = false;
             continue;
@@ -1519,7 +1559,7 @@ void ASTProver::bulkReduce(std::vector<Implicant>& state, std::vector<std::pair<
 
         int pairs = 0;
         if (bulkCombine(state, pairs)) {
-            steps.push_back({"Combining", implicantsToAST(state, towardSOP, vars)->toString()});
+            steps.push_back({"Combining Law", implicantsToAST(state, towardSOP, vars)->toString()});
             changed = true;
             firstPass = false;
             continue;
@@ -1533,7 +1573,7 @@ void ASTProver::bulkReduce(std::vector<Implicant>& state, std::vector<std::pair<
         // any search happens), pass no protection and let the rule run in
         // its ordinary, fully general form.
         if (bulkRedundancy(state, red, firstPass ? protectA : nullptr, firstPass ? protectB : nullptr, firstPass ? protectC : nullptr)) {
-            steps.push_back({"Redundancy (Consensus)", implicantsToAST(state, towardSOP, vars)->toString()});
+            steps.push_back({"Consensus Theorem", implicantsToAST(state, towardSOP, vars)->toString()});
             changed = true;
             firstPass = false;
             continue;
@@ -1646,7 +1686,7 @@ ProofOutcome ASTProver::searchToTarget(std::vector<Implicant> start, const std::
                 visited.insert(key);
 
                 auto childPath = cur.path;
-                childPath.push_back({"Consensus (Term Added)", implicantsToAST(next, towardSOP, vars)->toString()});
+                childPath.push_back({"Consensus Theorem (Term Added)", implicantsToAST(next, towardSOP, vars)->toString()});
                 bulkReduce(next, childPath, towardSOP, vars, &cur.state[i], &cur.state[j], &(*c));
 
                 if (next == goal) {
@@ -1847,7 +1887,7 @@ std::string ASTProver::formatProof(const std::vector<std::pair<std::string, std:
 
     if (forwardSteps.empty()) {
         std::stringstream ss;
-        ss << "Already in target form:\n" << originalTargetStr << "\n";
+        ss << " -- (Already Simplified) -->\n" << originalTargetStr << "\n";
         return ss.str();
     }
 

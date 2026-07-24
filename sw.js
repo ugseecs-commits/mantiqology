@@ -1,15 +1,35 @@
-const CACHE_NAME = 'mantiq-cache-v2';
+const CACHE_NAME = 'mantiq-cache-v4';
 
-// List all the files your game needs to run
 const urlsToCache = [
   './',
   './index.html',
-  './index.js',
-  './index.wasm',
-  './index.data',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './wasm/mantiq-worker.js',
+  './wasm/index.wasm',
+  // CSS
+  './css/vars.css',
+  './css/layout.css',
+  './css/topbar.css',
+  './css/panels.css',
+  './css/solution.css',
+  './css/views.css',
+  './css/kmap.css',
+  './css/responsive.css',
+  // JS
+  './js/worker-bridge.js',
+  './js/zoom-pan.js',
+  './js/ui-core.js',
+  './js/solution-renderer.js',
+  './js/app-core.js',
+  './js/rule-modal.js',
+  './js/modals-events.js',
+  './js/truth-table.js',
+  './js/circuit.js',
+  './js/simulation.js',
+  './js/kmap.js',
+  './tutorial.js',
 ];
 
 // 1. When the service worker installs, cache all the files
